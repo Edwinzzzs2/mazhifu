@@ -53,6 +53,8 @@ export function buildMapaySubmitUrl({
     money: Number(order.money).toFixed(2),
     sitename: process.env.MAPAY_SITENAME || "码支付卡密铺",
     param: order.product_id,
+    channel_id: process.env.MAPAY_CHANNEL_ID || "",
+    device: process.env.MAPAY_DEVICE || "",
   };
 
   const signedParams = {

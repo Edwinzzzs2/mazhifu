@@ -1,6 +1,6 @@
 # 码支付卡密铺
 
-一个 Next.js + React + shadcn 风格组件的简单卡网示例。首页有预置商品，默认金额 `0.10` 元；点击购买后创建 PG 订单，并跳转到码支付页面。
+一个 Next.js + React + shadcn 风格组件的简单卡网示例。首页有预置商品，默认金额 `0.10` 元；点击购买后创建 PG 订单，先进入站内订单确认页，再跳转到码支付页面。
 
 ## 环境变量
 
@@ -9,6 +9,8 @@
 - `MAPAY_PID`: 码支付商户 ID
 - `MAPAY_KEY`: 码支付商户密钥
 - `MAPAY_GATEWAY`: 默认 `https://mzf.mapay.cc/xpay/epay/submit.php`
+- `MAPAY_CHANNEL_ID`: 可选，码支付后台指定通道 ID
+- `MAPAY_DEVICE`: 可选，设备类型，例如 `pc`、`mobile`、`alipay`
 - `APP_URL`: 支付回调可访问的站点地址，本地调试为 `http://localhost:3000`
 - `POSTGRES_*`: PG 连接信息
 

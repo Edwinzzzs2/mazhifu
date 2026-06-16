@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { buildMapaySubmitUrl } from "@/lib/mapay";
 import { createOrder } from "@/lib/orders";
 import { findProductById } from "@/lib/products";
 
@@ -17,13 +16,9 @@ export async function POST(request: Request) {
     }
 
     const order = await createOrder(product, payType);
-    const paymentUrl = buildMapaySubmitUrl({
-      order,
-      pay_type: payType,
-      request_origin: new URL(request.url).origin,
-    });
+    const checkoutUrl = new URL(`/pay/${encodeURIComponent(order.out_trade_no)}`, request.url);
 
-    return NextResponse.redirect(paymentUrl, { status: 303 });
+    return NextResponse.redirect(checkoutUrl, { status: 303 });
   } catch (error) {
     console.error("checkout failed", error);
     return NextResponse.redirect(new URL("/?checkout=failed", request.url), { status: 303 });
