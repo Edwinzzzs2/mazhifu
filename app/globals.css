@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Aptos", "Segoe UI", sans-serif;
+  --font-display: "Georgia", "Times New Roman", serif;
+
+  --background: 84 29% 96%;
+  --foreground: 212 30% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 212 30% 11%;
+  --primary: 174 80% 27%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 26 92% 92%;
+  --secondary-foreground: 18 57% 23%;
+  --muted: 84 15% 88%;
+  --muted-foreground: 212 12% 41%;
+  --accent: 8 86% 59%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 75% 49%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 212 18% 78%;
+  --input: 212 18% 78%;
+  --ring: 174 80% 27%;
+  --radius: 8px;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  min-height: 100vh;
+  color: hsl(var(--foreground));
+  background:
+    linear-gradient(90deg, hsl(84 29% 96%) 21px, transparent 1%) center,
+    linear-gradient(hsl(84 29% 96%) 21px, transparent 1%) center,
+    hsl(82 18% 90%);
+  background-size: 22px 22px;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+}
+
+.shop-frame {
+  border: 1px solid hsl(var(--foreground));
+  background: hsl(var(--background) / 0.86);
+  box-shadow: 10px 10px 0 hsl(var(--foreground) / 0.12);
+}
