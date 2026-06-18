@@ -29,6 +29,7 @@ export type OrderRecord = {
   expires_at: string;
   paid_at: string | null;
   fulfilled_at: string | null;
+  query_password_hash: string | null;
 };
 
 export type CreatedOrder = {
@@ -39,6 +40,11 @@ export type CreatedOrder = {
 export type OrderView = OrderRecord & {
   delivery_content: string[];
 };
+
+function hashQueryPassword(password: string): string | null {
+  if (!password) return null;
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
 
 function createOutTradeNo() {
   const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
@@ -64,6 +70,7 @@ export async function createOrder(
   payType: string,
   quantity: number,
   contact: string,
+  queryPassword = "",
 ): Promise<CreatedOrder> {
   await ensureStoreSchema();
 
@@ -104,11 +111,13 @@ export async function createOrder(
       `
         INSERT INTO orders (
           out_trade_no, product_id, product_name, money, unit_price,
-          quantity, contact, pay_type, status_token_hash, expires_at
+          quantity, contact, pay_type, status_token_hash, expires_at,
+          query_password_hash
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
-          NOW() + ($10 * INTERVAL '1 minute')
+          NOW() + ($10 * INTERVAL '1 minute'),
+          $11
         )
         RETURNING *
       `,
@@ -123,6 +132,7 @@ export async function createOrder(
         payType,
         hashAccessToken(accessToken),
         expiresMinutes,
+        hashQueryPassword(queryPassword),
       ],
     );
 
@@ -178,6 +188,99 @@ export async function getOrderViewWithAccess(outTradeNo: string, accessToken: st
     ...order,
     delivery_content: deliveryContent,
   } satisfies OrderView;
+}
+
+export async function getOrderViewByEmail(outTradeNo: string, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!outTradeNo || !normalizedEmail) return null;
+
+  const result = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+  const order = result.rows[0];
+  if (!order) return null;
+
+  // 用邮箱与下单时的 contact 做大小写不敏感匹配
+  if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
+
+  await expireOrderIfNeeded(outTradeNo);
+
+  const deliveryContent = order.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
+  return {
+    ...order,
+    delivery_content: deliveryContent,
+  } satisfies OrderView;
+}
+
+export async function getOrderViewByQueryAuth(
+  outTradeNo: string,
+  email: string,
+  queryPassword: string,
+): Promise<OrderView | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!outTradeNo || !normalizedEmail || !queryPassword) return null;
+
+  const result = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+  const order = result.rows[0];
+  if (!order) return null;
+
+  if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
+
+  const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
+  if (!order.query_password_hash || order.query_password_hash !== inputHash) return null;
+
+  await expireOrderIfNeeded(outTradeNo);
+
+  const refreshed = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+  const refreshedOrder = refreshed.rows[0] ?? order;
+  const deliveryContent =
+    refreshedOrder.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
+  return { ...refreshedOrder, delivery_content: deliveryContent } satisfies OrderView;
+}
+
+export async function getOrderViewInternal(outTradeNo: string): Promise<OrderView | null> {
+  const result = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+  const order = result.rows[0];
+  if (!order) return null;
+  const deliveryContent =
+    order.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
+  return { ...order, delivery_content: deliveryContent } satisfies OrderView;
+}
+
+export async function listOrdersByQueryAuth(
+  email: string,
+  queryPassword: string,
+): Promise<OrderView[]> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !queryPassword) return [];
+
+  const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
+
+  const result = await getPool().query<OrderRecord>(
+    `SELECT * FROM orders
+     WHERE LOWER(contact) = $1 AND query_password_hash = $2
+     ORDER BY created_at DESC
+     LIMIT 20`,
+    [normalizedEmail, inputHash],
+  );
+
+  const views: OrderView[] = [];
+  for (const order of result.rows) {
+    const deliveryContent =
+      order.status === "paid" ? await getDeliverySecrets(order.out_trade_no) : [];
+    views.push({ ...order, delivery_content: deliveryContent } satisfies OrderView);
+  }
+  return views;
 }
 
 async function expireOrderIfNeeded(outTradeNo: string) {
@@ -443,3 +546,81 @@ export async function recordOrderQuery(outTradeNo: string, result: MapayQueryRes
     [outTradeNo, JSON.stringify(result)],
   );
 }
+
+export type AdminOrderListItem = OrderRecord;
+
+export type AdminOrderListResult = {
+  orders: AdminOrderListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export async function listOrdersForAdmin(
+  page = 1,
+  status = "",
+  q = "",
+): Promise<AdminOrderListResult> {
+  await ensureStoreSchema();
+
+  const pageSize = 20;
+  const offset = (Math.max(1, page) - 1) * pageSize;
+  const keyword = q.trim().slice(0, 120);
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (status) {
+    conditions.push(`status = $${idx++}`);
+    params.push(status);
+  }
+
+  if (keyword) {
+    conditions.push(`(out_trade_no ILIKE $${idx} OR contact ILIKE $${idx})`);
+    params.push(`%${keyword}%`);
+    idx++;
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const [countResult, rowsResult] = await Promise.all([
+    getPool().query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM orders ${where}`,
+      params,
+    ),
+    getPool().query<OrderRecord>(
+      `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, pageSize, offset],
+    ),
+  ]);
+
+  return {
+    orders: rowsResult.rows,
+    total: Number(countResult.rows[0]?.total ?? 0),
+    page: Math.max(1, page),
+    page_size: pageSize,
+  };
+}
+
+export type AdminOrderDetail = OrderRecord & {
+  delivery_secrets: string[];
+};
+
+export async function getOrderDetailForAdmin(outTradeNo: string): Promise<AdminOrderDetail | null> {
+  await ensureStoreSchema();
+
+  const result = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+
+  const order = result.rows[0];
+  if (!order) return null;
+
+  const delivery_secrets =
+    order.fulfillment_status === "delivered" ? await getDeliverySecrets(outTradeNo) : [];
+
+  return { ...order, delivery_secrets };
+}
+

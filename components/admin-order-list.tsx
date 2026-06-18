@@ -1,0 +1,383 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  Copy,
+  RefreshCw,
+  Search,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { AdminOrderDetail, AdminOrderListItem, AdminOrderListResult } from "@/lib/orders";
+
+const STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  pending: { label: "待付款", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  paid: { label: "已付款", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  expired: { label: "已过期", className: "border-slate-200 bg-slate-100 text-slate-500" },
+  cancelled: { label: "已取消", className: "border-slate-200 bg-slate-100 text-slate-500" },
+};
+
+const FULFILLMENT_LABELS: Record<string, { label: string; className: string }> = {
+  pending: { label: "待发货", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  delivered: { label: "已发货", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  failed: { label: "发货失败", className: "border-red-200 bg-red-50 text-red-700" },
+};
+
+function StatusPill({ value, map }: { value: string; map: typeof STATUS_LABELS }) {
+  const config = map[value] ?? { label: value, className: "border-slate-200 bg-slate-100 text-slate-500" };
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${config.className}`}>
+      {config.label}
+    </span>
+  );
+}
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
+  const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`)
+      .then((r) => r.json())
+      .then((data: AdminOrderDetail) => setDetail(data))
+      .catch(() => setDetail(null))
+      .finally(() => setLoading(false));
+  }, [outTradeNo]);
+
+  async function copyText(text: string, key: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(""), 1400);
+  }
+
+  if (loading) {
+    return <div className="px-6 py-4 text-sm text-slate-400">正在加载订单详情…</div>;
+  }
+  if (!detail) {
+    return <div className="px-6 py-4 text-sm text-red-500">加载失败</div>;
+  }
+
+  return (
+    <div className="grid gap-5 border-t border-sky-100 bg-sky-50/40 px-6 py-5 md:grid-cols-2">
+      {/* 左：订单信息 */}
+      <div className="space-y-3 text-sm">
+        <div className="font-semibold text-slate-700">订单信息</div>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+          <dt className="text-slate-400">订单号</dt>
+          <dd className="flex items-center gap-1.5 font-mono break-all">
+            {detail.out_trade_no}
+            <button
+              onClick={() => copyText(detail.out_trade_no, "no")}
+              className="shrink-0 text-slate-400 hover:text-sky-600"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </dd>
+
+          <dt className="text-slate-400">平台流水号</dt>
+          <dd className="font-mono break-all">{detail.trade_no ?? "-"}</dd>
+
+          <dt className="text-slate-400">联系方式</dt>
+          <dd className="break-all">{detail.contact || "-"}</dd>
+
+          <dt className="text-slate-400">支付方式</dt>
+          <dd>{detail.pay_type}</dd>
+
+          <dt className="text-slate-400">下单时间</dt>
+          <dd>{formatDate(detail.created_at)}</dd>
+
+          <dt className="text-slate-400">付款时间</dt>
+          <dd>{formatDate(detail.paid_at)}</dd>
+
+          <dt className="text-slate-400">发货时间</dt>
+          <dd>{formatDate(detail.fulfilled_at)}</dd>
+        </dl>
+      </div>
+
+      {/* 右：已发卡密 */}
+      <div className="space-y-3 text-sm">
+        <div className="font-semibold text-slate-700">
+          已发卡密
+          {detail.delivery_secrets.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-slate-400">
+              共 {detail.delivery_secrets.length} 张
+            </span>
+          )}
+        </div>
+        {detail.delivery_secrets.length === 0 ? (
+          <div className="text-xs text-slate-400">
+            {detail.fulfillment_status === "delivered" ? "卡密为空" : "尚未发货"}
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {detail.delivery_secrets.map((secret, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-2 rounded-md border border-sky-100 bg-white px-3 py-2 font-mono text-xs"
+              >
+                <span className="break-all">{secret}</span>
+                <button
+                  onClick={() => copyText(secret, `secret-${i}`)}
+                  className="shrink-0 text-slate-400 hover:text-sky-600"
+                >
+                  {copied === `secret-${i}` ? (
+                    <span className="text-emerald-500">✓</span>
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function AdminOrderList() {
+  const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [status, setStatus] = useState("");
+  const [q, setQ] = useState("");
+  const [inputQ, setInputQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const load = useCallback(
+    async (nextPage = page, nextStatus = status, nextQ = q) => {
+      setLoading(true);
+      try {
+        const url = new URL("/api/admin/orders", window.location.origin);
+        url.searchParams.set("page", String(nextPage));
+        if (nextStatus) url.searchParams.set("status", nextStatus);
+        if (nextQ) url.searchParams.set("q", nextQ);
+        const resp = await fetch(url, { cache: "no-store" });
+        const data = (await resp.json()) as AdminOrderListResult & { message?: string };
+        if (!resp.ok) throw new Error(data.message ?? "加载失败");
+        setOrders(data.orders ?? []);
+        setTotal(data.total ?? 0);
+        setPage(data.page ?? 1);
+        setPageSize(data.page_size ?? 20);
+      } catch {
+        // silently fail, keep existing data
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, status, q],
+  );
+
+  useEffect(() => {
+    void load(1, status, q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, q]);
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setQ(inputQ);
+    setPage(1);
+  }
+
+  function handleStatusChange(val: string) {
+    setStatus(val);
+    setPage(1);
+    setExpandedId(null);
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
+  function goPage(p: number) {
+    const next = Math.max(1, Math.min(totalPages, p));
+    setPage(next);
+    void load(next, status, q);
+  }
+
+  return (
+    <section className="mt-6 rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+      {/* 标题栏 */}
+      <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
+            <ClipboardList className="h-4 w-4" />
+            订单记录
+          </div>
+          <h2 className="mt-1 text-xl font-bold">
+            全部订单
+            {total > 0 && (
+              <span className="ml-2 text-base font-normal text-slate-400">共 {total} 笔</span>
+            )}
+          </h2>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => load(page, status, q)}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          刷新
+        </Button>
+      </div>
+
+      {/* 筛选栏 */}
+      <div className="flex flex-col gap-3 border-b border-sky-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* 状态筛选 */}
+        <div className="flex flex-wrap gap-2 text-sm">
+          {[
+            { value: "", label: "全部" },
+            { value: "pending", label: "待付款" },
+            { value: "paid", label: "已付款" },
+            { value: "expired", label: "已过期" },
+          ].map((item) => (
+            <button
+              key={item.value}
+              onClick={() => handleStatusChange(item.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                status === item.value
+                  ? "border-sky-500 bg-sky-500 text-white"
+                  : "border-sky-200 bg-white text-slate-600 hover:border-sky-400"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 搜索 */}
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <input
+            className="admin-input h-9 w-52 text-sm"
+            placeholder="订单号 / 联系方式"
+            value={inputQ}
+            onChange={(e) => setInputQ(e.target.value)}
+          />
+          <Button type="submit" variant="outline" size="sm">
+            <Search className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
+
+      {/* 订单表格 */}
+      <div className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] border-collapse bg-white text-sm">
+            <thead className="bg-sky-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3 w-8" />
+                <th className="px-4 py-3">订单号</th>
+                <th className="px-4 py-3">商品</th>
+                <th className="px-4 py-3">金额</th>
+                <th className="px-4 py-3">数量</th>
+                <th className="px-4 py-3">联系方式</th>
+                <th className="px-4 py-3">支付状态</th>
+                <th className="px-4 py-3">发货状态</th>
+                <th className="px-4 py-3">下单时间</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sky-50">
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
+                    {loading ? "正在加载…" : "暂无订单"}
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => (
+                  <>
+                    <tr
+                      key={order.out_trade_no}
+                      className="cursor-pointer hover:bg-sky-50/60"
+                      onClick={() => toggleExpand(order.out_trade_no)}
+                    >
+                      <td className="px-4 py-3 text-slate-400">
+                        {expandedId === order.out_trade_no ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                        {order.out_trade_no}
+                      </td>
+                      <td className="max-w-[160px] truncate px-4 py-3">{order.product_name}</td>
+                      <td className="px-4 py-3 font-semibold text-sky-700">¥{order.money}</td>
+                      <td className="px-4 py-3">{order.quantity}</td>
+                      <td className="max-w-[120px] truncate px-4 py-3 text-slate-500 text-xs">
+                        {order.contact || "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill value={order.status} map={STATUS_LABELS} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-400">
+                        {formatDate(order.created_at)}
+                      </td>
+                    </tr>
+                    {expandedId === order.out_trade_no && (
+                      <tr key={`${order.out_trade_no}-detail`}>
+                        <td colSpan={9} className="p-0">
+                          <OrderDetailPanel outTradeNo={order.out_trade_no} />
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 分页 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-sky-100 px-5 py-3 text-sm">
+          <span className="text-slate-400 text-xs">
+            第 {page} / {totalPages} 页，共 {total} 笔
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => goPage(page - 1)}
+            >
+              上一页
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => goPage(page + 1)}
+            >
+              下一页
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

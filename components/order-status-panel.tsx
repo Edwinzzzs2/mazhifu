@@ -58,9 +58,12 @@ export function OrderStatusPanel({
     if (!shouldPoll) {
       return;
     }
-    const timer = window.setInterval(refreshStatus, 5000);
+    // 立刻触发一次，之后每 3 秒轮询
+    void refreshStatus();
+    const timer = window.setInterval(refreshStatus, 3000);
     return () => window.clearInterval(timer);
-  }, [order.status, order.fulfillment_status, order.out_trade_no, access_token, refreshStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.status, order.fulfillment_status]);
 
   const paid = order.status === "paid";
   const expired = order.status === "expired";

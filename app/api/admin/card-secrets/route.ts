@@ -38,15 +38,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "product_id_required" }, { status: 400 });
   }
 
-  const [cardSecrets, stats] = await Promise.all([
-    listCardSecrets(productId, status),
-    getCardSecretStats(productId),
-  ]);
+  try {
+    const [cardSecrets, stats] = await Promise.all([
+      listCardSecrets(productId, status),
+      getCardSecretStats(productId),
+    ]);
 
-  return NextResponse.json({
-    card_secrets: cardSecrets,
-    stats,
-  });
+    return NextResponse.json({
+      card_secrets: cardSecrets,
+      stats,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "读取库存失败";
+    return NextResponse.json({ message }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

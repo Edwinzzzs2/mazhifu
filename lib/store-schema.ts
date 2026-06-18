@@ -62,6 +62,7 @@ async function initializeStoreSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS query_response JSONB;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_status TEXT NOT NULL DEFAULT 'pending';
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilled_at TIMESTAMPTZ;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS query_password_hash TEXT;
 
     UPDATE orders SET unit_price = money WHERE unit_price IS NULL;
     UPDATE orders SET expires_at = created_at + INTERVAL '15 minutes' WHERE expires_at IS NULL;
@@ -181,6 +182,11 @@ async function seedDemoCardSecrets() {
       secret: "GIFT-CODE-" + String(index + 1).padStart(4, "0"),
     })),
   ];
+
+  // 先删除所有旧的 seed 数据，确保密钥轮换后用新密钥重新加密
+  await getPool().query(
+    `DELETE FROM card_secrets WHERE batch_no = 'seed' AND status = 'available'`,
+  );
 
   await getPool().query(
     `

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { queryMapayOrder } from "@/lib/mapay";
 import {
+  getOrderViewByQueryAuth,
+  getOrderViewInternal,
   getOrderViewWithAccess,
   markOrderFromQuery,
   recordOrderQuery,
@@ -16,18 +18,24 @@ type StatusRouteContext = {
 export async function GET(request: Request, { params }: StatusRouteContext) {
   const url = new URL(request.url);
   const accessToken = url.searchParams.get("token") ?? "";
-  let order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
+  const contactinfo = url.searchParams.get("contactinfo") ?? "";
+  const queryPassword = url.searchParams.get("queryPassword") ?? "";
+
+  let order = accessToken
+    ? await getOrderViewWithAccess(params.out_trade_no, accessToken)
+    : contactinfo && queryPassword
+      ? await getOrderViewByQueryAuth(params.out_trade_no, contactinfo, queryPassword)
+      : null;
 
   if (!order) {
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
   }
 
   const lastCheckedAt = order.query_checked_at ? new Date(order.query_checked_at).getTime() : 0;
-  const canReconcile = Date.now() - lastCheckedAt >= 15_000;
+  const canReconcile = Date.now() - lastCheckedAt >= 5_000;
 
   if (order.status === "pending" && canReconcile) {
     try {
-      // 浏览器只请求本站；Mapay 密钥和主动补单查询都留在服务端执行。
       const result = await queryMapayOrder(order.out_trade_no);
       await recordOrderQuery(order.out_trade_no, result);
       if (
@@ -37,7 +45,7 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
       ) {
         await markOrderFromQuery(result);
       }
-      order = (await getOrderViewWithAccess(params.out_trade_no, accessToken)) ?? order;
+      order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
     } catch (error) {
       console.error("Mapay reconciliation failed", error);
     }
@@ -46,7 +54,7 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
   if (order.status === "paid" && order.fulfillment_status !== "delivered") {
     try {
       await retryOrderFulfillment(order.out_trade_no);
-      order = (await getOrderViewWithAccess(params.out_trade_no, accessToken)) ?? order;
+      order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
     } catch (error) {
       console.error("Order fulfillment retry failed", error);
     }
