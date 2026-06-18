@@ -105,7 +105,7 @@ export async function queryMapayOrder(outTradeNo: string) {
   queryUrl.searchParams.set("out_trade_no", outTradeNo);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 3000);
   const response = await fetch(queryUrl, {
     method: "GET",
     cache: "no-store",

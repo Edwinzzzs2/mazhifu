@@ -50,6 +50,7 @@ type RemoteOrderStatus = {
   fulfillment_status: "pending" | "delivered" | "failed";
   delivery_content: string[];
   created_at: string;
+  expires_at: string | null;
   paid_at: string | null;
 };
 
@@ -498,6 +499,7 @@ function OrderTrackingModal({
   const [order, setOrder] = useState<RemoteOrderStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const stopRef = useRef(false);
   const fetchingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
@@ -542,7 +544,10 @@ function OrderTrackingModal({
   }, [info.out_trade_no]);
 
   const paid = order?.status === "paid";
-  const expired = order?.status === "expired" || order?.status === "cancelled";
+  // 服务端状态 + 前端本地时间双重判断过期
+  const serverExpired = order?.status === "expired" || order?.status === "cancelled";
+  const localExpired = !paid && order?.expires_at ? new Date(order.expires_at).getTime() <= Date.now() : false;
+  const expired = serverExpired || localExpired;
   const delivered = paid && order?.fulfillment_status === "delivered";
 
   async function copyAll() {
