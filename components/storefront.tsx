@@ -498,48 +498,48 @@ function OrderTrackingModal({
   const [order, setOrder] = useState<RemoteOrderStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const stopRef = useRef(false);
+  const fetchingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
+    if (fetchingRef.current) return;  // 上一个还没返回，跳过
+    fetchingRef.current = true;
     try {
       const url = `/api/orders/${encodeURIComponent(info.out_trade_no)}/status?contactinfo=${encodeURIComponent(info.email)}&queryPassword=${encodeURIComponent(info.queryPassword)}`;
       const resp = await fetch(url, { cache: "no-store" });
       if (resp.ok) {
         const data = (await resp.json()) as RemoteOrderStatus;
         setOrder(data);
+        // 终态：停止后续轮询
+        if (
+          (data.status === "paid" && data.fulfillment_status === "delivered") ||
+          data.status === "expired" ||
+          data.status === "cancelled"
+        ) {
+          stopRef.current = true;
+        }
       }
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
     }
   }, [info]);
 
   useEffect(() => {
     stopRef.current = false;
-
-    async function poll() {
-      if (stopRef.current) return;
-      await fetchStatus();
+    // 立即查一次
+    void fetchStatus();
+    // 之后每 5 秒查一次
+    const timer = window.setInterval(() => {
       if (!stopRef.current) {
-        // 已发货或已过期后停止轮询
-        setOrder((prev) => {
-          if (
-            (prev?.status === "paid" && prev?.fulfillment_status === "delivered") ||
-            prev?.status === "expired" ||
-            prev?.status === "cancelled"
-          ) {
-            stopRef.current = true;
-          }
-          return prev;
-        });
-        if (!stopRef.current) {
-          setTimeout(() => { void poll(); }, 3000);
-        }
+        void fetchStatus();
       }
-    }
-
-    void poll();
-    return () => { stopRef.current = true; };
-  }, [fetchStatus]);
+    }, 5000);
+    return () => {
+      stopRef.current = true;
+      window.clearInterval(timer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info.out_trade_no]);
 
   const paid = order?.status === "paid";
   const expired = order?.status === "expired" || order?.status === "cancelled";
