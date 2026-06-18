@@ -7,6 +7,22 @@ type BuildMapaySubmitUrlOptions = {
   order: OrderRecord;
   pay_type: string;
   request_origin: string;
+  access_token: string;
+};
+
+export type MapayQueryResult = {
+  code: number | string;
+  msg?: string;
+  trade_no?: string;
+  out_trade_no?: string;
+  api_trade_no?: string;
+  type?: string;
+  pid?: number | string;
+  money?: string;
+  status?: number | string;
+  param?: string;
+  buyer?: string;
+  [key: string]: unknown;
 };
 
 function getRequiredEnv(name: string) {
@@ -36,19 +52,21 @@ export function buildMapaySubmitUrl({
   order,
   pay_type,
   request_origin,
+  access_token,
 }: BuildMapaySubmitUrlOptions) {
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = getAppUrl(request_origin);
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl).toString();
+  const returnUrl = new URL("/pay/return", appUrl);
+  returnUrl.searchParams.set("token", access_token);
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl,
+    return_url: returnUrl.toString(),
     name: order.product_name,
     money: Number(order.money).toFixed(2),
     sitename: process.env.MAPAY_SITENAME || "码支付卡密铺",
@@ -74,6 +92,32 @@ export function buildMapaySubmitUrl({
   return paymentUrl.toString();
 }
 
+export async function queryMapayOrder(outTradeNo: string) {
+  const pid = getRequiredEnv("MAPAY_PID");
+  const key = getRequiredEnv("MAPAY_KEY");
+  const queryUrl = new URL(
+    process.env.MAPAY_API_URL || "https://mzf.mapay.cc/xpay/epay/api.php",
+  );
+
+  queryUrl.searchParams.set("act", "order");
+  queryUrl.searchParams.set("pid", pid);
+  queryUrl.searchParams.set("key", key);
+  queryUrl.searchParams.set("out_trade_no", outTradeNo);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  const response = await fetch(queryUrl, {
+    method: "GET",
+    cache: "no-store",
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
+  if (!response.ok) {
+    throw new Error(`Mapay query failed with HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as MapayQueryResult;
+}
+
 export async function parseMapayPayload(request: Request): Promise<MapayPayload> {
   if (request.method === "GET") {
     return Object.fromEntries(new URL(request.url).searchParams.entries());
@@ -97,5 +141,7 @@ export function verifyMapayPayload(payload: MapayPayload) {
   }
 
   const expectedSign = createMapaySign(payload, key);
-  return payload.sign === expectedSign;
+  const actual = Buffer.from(payload.sign || "");
+  const expected = Buffer.from(expectedSign);
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }

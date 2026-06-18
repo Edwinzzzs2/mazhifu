@@ -1,112 +1,445 @@
 import crypto from "crypto";
+import type { PoolClient } from "pg";
+import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
-import type { MapayPayload } from "@/lib/mapay";
-import type { Product } from "@/lib/products";
+import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
+import type { ProductRecord } from "@/lib/products";
+import { ensureStoreSchema } from "@/lib/store-schema";
+
+export type OrderStatus = "pending" | "paid" | "expired" | "cancelled";
+export type FulfillmentStatus = "pending" | "delivered" | "failed";
 
 export type OrderRecord = {
   out_trade_no: string;
   product_id: string;
   product_name: string;
   money: string;
+  unit_price: string;
+  quantity: number;
+  contact: string;
   pay_type: string;
-  status: "pending" | "paid";
+  status: OrderStatus;
+  fulfillment_status: FulfillmentStatus;
+  status_token_hash: string | null;
   trade_no: string | null;
   raw_notify: unknown | null;
+  query_response: unknown | null;
+  query_checked_at: string | null;
   created_at: string;
+  expires_at: string;
   paid_at: string | null;
+  fulfilled_at: string | null;
 };
 
-let tableReady = false;
+export type CreatedOrder = {
+  order: OrderRecord;
+  access_token: string;
+};
 
-async function ensureOrdersTable() {
-  if (tableReady) {
-    return;
-  }
-
-  // 首次运行自动建表，方便本地直接启动；正式环境可以把这段 SQL 拆成迁移脚本。
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS orders (
-      out_trade_no TEXT PRIMARY KEY,
-      product_id TEXT NOT NULL,
-      product_name TEXT NOT NULL,
-      money NUMERIC(10, 2) NOT NULL,
-      pay_type TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      trade_no TEXT,
-      raw_notify JSONB,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      paid_at TIMESTAMPTZ
-    );
-  `);
-
-  tableReady = true;
-}
+export type OrderView = OrderRecord & {
+  delivery_content: string[];
+};
 
 function createOutTradeNo() {
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/\D/g, "")
-    .slice(0, 14);
-  const suffix = crypto.randomInt(100000, 999999);
-  return `MZF${timestamp}${suffix}`;
+  const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  return `MZF${timestamp}${crypto.randomInt(100000, 999999)}`;
 }
 
-export async function createOrder(product: Product, payType: string): Promise<OrderRecord> {
-  await ensureOrdersTable();
+function hashAccessToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
+function tokenMatches(storedHash: string | null, token: string) {
+  if (!storedHash || !token) {
+    return false;
+  }
+
+  const actual = Buffer.from(hashAccessToken(token), "hex");
+  const expected = Buffer.from(storedHash, "hex");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+export async function createOrder(
+  product: ProductRecord,
+  payType: string,
+  quantity: number,
+  contact: string,
+): Promise<CreatedOrder> {
+  await ensureStoreSchema();
+
+  const safeQuantity = Math.max(1, Math.min(10, Math.trunc(quantity)));
+  if (!product.active || product.stock < safeQuantity) {
+    throw new Error("product is unavailable");
+  }
+
+  const accessToken = crypto.randomBytes(24).toString("base64url");
   const outTradeNo = createOutTradeNo();
-  const result = await getPool().query<OrderRecord>(
-    `
-      INSERT INTO orders (out_trade_no, product_id, product_name, money, pay_type)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
-    `,
-    [outTradeNo, product.id, product.name, product.money, payType],
-  );
+  const money = (Number(product.price) * safeQuantity).toFixed(2);
+  const configuredExpires = Number(process.env.ORDER_TTL_MINUTES ?? 15);
+  const expiresMinutes = Number.isFinite(configuredExpires)
+    ? Math.max(5, configuredExpires)
+    : 15;
+  const client = await getPool().connect();
 
-  return result.rows[0];
+  try {
+    await client.query("BEGIN");
+
+    // 下单阶段先预占卡密，避免多个未支付订单同时占用同一份可发库存。
+    const lockedSecrets = await client.query<{ id: string }>(
+      `
+        SELECT id::text
+        FROM card_secrets
+        WHERE product_id = $1 AND status = 'available'
+        ORDER BY id ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT $2
+      `,
+      [product.id, safeQuantity],
+    );
+    if (lockedSecrets.rows.length < safeQuantity) {
+      throw new Error("card secret stock is unavailable");
+    }
+
+    const result = await client.query<OrderRecord>(
+      `
+        INSERT INTO orders (
+          out_trade_no, product_id, product_name, money, unit_price,
+          quantity, contact, pay_type, status_token_hash, expires_at
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9,
+          NOW() + ($10 * INTERVAL '1 minute')
+        )
+        RETURNING *
+      `,
+      [
+        outTradeNo,
+        product.id,
+        product.name,
+        money,
+        product.price,
+        safeQuantity,
+        contact.slice(0, 120),
+        payType,
+        hashAccessToken(accessToken),
+        expiresMinutes,
+      ],
+    );
+
+    const secretIds = lockedSecrets.rows.map((row) => row.id);
+    const reserved = await client.query(
+      `
+        UPDATE card_secrets
+        SET status = 'reserved',
+            order_no = $1,
+            reserved_at = NOW(),
+            updated_at = NOW()
+        WHERE id = ANY($2::bigint[]) AND status = 'available'
+      `,
+      [outTradeNo, secretIds],
+    );
+    if (reserved.rowCount !== secretIds.length) {
+      throw new Error("card secret reservation failed");
+    }
+
+    await client.query("COMMIT");
+    return { order: result.rows[0], access_token: accessToken };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getOrderByOutTradeNo(outTradeNo: string) {
-  await ensureOrdersTable();
-
+  await ensureStoreSchema();
+  await expireOrderIfNeeded(outTradeNo);
   const result = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",
     [outTradeNo],
   );
-
   return result.rows[0] ?? null;
 }
 
-export async function markOrderFromPayment(payload: MapayPayload) {
-  if (payload.trade_status !== "TRADE_SUCCESS" || !payload.out_trade_no) {
-    return false;
-  }
+export async function getOrderWithAccess(outTradeNo: string, accessToken: string) {
+  const order = await getOrderByOutTradeNo(outTradeNo);
+  return order && tokenMatches(order.status_token_hash, accessToken) ? order : null;
+}
 
-  await ensureOrdersTable();
-
-  const order = await getOrderByOutTradeNo(payload.out_trade_no);
+export async function getOrderViewWithAccess(outTradeNo: string, accessToken: string) {
+  const order = await getOrderWithAccess(outTradeNo, accessToken);
   if (!order) {
-    return false;
+    return null;
   }
 
-  const orderMoney = Number(order.money).toFixed(2);
-  const paidMoney = Number(payload.money).toFixed(2);
-  if (orderMoney !== paidMoney) {
-    return false;
-  }
+  const deliveryContent = order.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
+  return {
+    ...order,
+    delivery_content: deliveryContent,
+  } satisfies OrderView;
+}
 
+async function expireOrderIfNeeded(outTradeNo: string) {
   await getPool().query(
     `
+      WITH expired AS (
+        UPDATE orders
+        SET status = 'expired'
+        WHERE out_trade_no = $1
+          AND status = 'pending'
+          AND expires_at <= NOW()
+        RETURNING out_trade_no
+      )
+      UPDATE card_secrets
+      SET status = 'available',
+          order_no = NULL,
+          reserved_at = NULL,
+          updated_at = NOW()
+      FROM expired
+      WHERE card_secrets.order_no = expired.out_trade_no
+        AND card_secrets.status = 'reserved'
+    `,
+    [outTradeNo],
+  );
+}
+
+async function assignCardSecretsForOrder(client: PoolClient, order: OrderRecord) {
+  if (order.fulfillment_status === "delivered") {
+    return true;
+  }
+
+  // 支付确认后优先使用本订单预占的卡密；晚到付款则尝试从现有可用库存补发。
+  const reserved = await client.query<{ id: string }>(
+    `
+      SELECT id::text
+      FROM card_secrets
+      WHERE order_no = $1 AND status = 'reserved'
+      ORDER BY id ASC
+      FOR UPDATE
+    `,
+    [order.out_trade_no],
+  );
+  const secretIds = reserved.rows.map((row) => row.id);
+  const need = order.quantity - secretIds.length;
+
+  if (need > 0) {
+    const available = await client.query<{ id: string }>(
+      `
+        SELECT id::text
+        FROM card_secrets
+        WHERE product_id = $1 AND status = 'available'
+        ORDER BY id ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT $2
+      `,
+      [order.product_id, need],
+    );
+    secretIds.push(...available.rows.map((row) => row.id));
+  }
+
+  if (secretIds.length < order.quantity) {
+    return false;
+  }
+
+  const used = await client.query(
+    `
+      UPDATE card_secrets
+      SET status = 'used',
+          order_no = $1,
+          reserved_at = NULL,
+          used_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ANY($2::bigint[])
+        AND status IN ('available', 'reserved')
+        AND (order_no IS NULL OR order_no = $1)
+    `,
+    [order.out_trade_no, secretIds],
+  );
+
+  if (used.rowCount !== secretIds.length) {
+    throw new Error("card secret assignment failed");
+  }
+
+  await client.query(
+    `
       UPDATE orders
-      SET status = 'paid',
-          trade_no = $2,
-          raw_notify = $3,
-          paid_at = COALESCE(paid_at, NOW())
+      SET fulfillment_status = 'delivered',
+          fulfilled_at = COALESCE(fulfilled_at, NOW())
       WHERE out_trade_no = $1
     `,
-    [payload.out_trade_no, payload.trade_no ?? null, payload],
+    [order.out_trade_no],
   );
 
   return true;
+}
+
+export async function retryOrderFulfillment(outTradeNo: string) {
+  await ensureStoreSchema();
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN");
+    const orderResult = await client.query<OrderRecord>(
+      "SELECT * FROM orders WHERE out_trade_no = $1 FOR UPDATE",
+      [outTradeNo],
+    );
+    const order = orderResult.rows[0];
+    if (!order || order.status !== "paid" || order.fulfillment_status === "delivered") {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    const delivered = await assignCardSecretsForOrder(client, order);
+    await client.query(
+      `
+        UPDATE orders
+        SET fulfillment_status = $2,
+            fulfilled_at = CASE WHEN $2 = 'delivered' THEN COALESCE(fulfilled_at, NOW()) ELSE fulfilled_at END
+        WHERE out_trade_no = $1
+      `,
+      [outTradeNo, delivered ? "delivered" : "failed"],
+    );
+
+    await client.query("COMMIT");
+    return delivered;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function markOrderPaid(
+  outTradeNo: string,
+  paidMoney: string,
+  tradeNo: string | null,
+  rawPayload: unknown,
+  source: "notify" | "query",
+) {
+  await ensureStoreSchema();
+  const client = await getPool().connect();
+
+  try {
+    await client.query("BEGIN");
+    const orderResult = await client.query<OrderRecord>(
+      "SELECT * FROM orders WHERE out_trade_no = $1 FOR UPDATE",
+      [outTradeNo],
+    );
+    const order = orderResult.rows[0];
+
+    // 订单号和金额必须同时匹配，避免拿真实小额回调去撞大额订单。
+    if (!order || Number(order.money).toFixed(2) !== Number(paidMoney).toFixed(2)) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    if (tradeNo) {
+      // 平台流水号只能绑定一个本地订单，重复回调只能幂等更新同一单。
+      const duplicate = await client.query<{ out_trade_no: string }>(
+        "SELECT out_trade_no FROM orders WHERE trade_no = $1 AND out_trade_no <> $2 LIMIT 1",
+        [tradeNo, outTradeNo],
+      );
+      if (duplicate.rowCount) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+    }
+
+    if (order.status !== "paid") {
+      // 首次确认支付时才把预占卡密转为已使用，后续 notify/query 重放只会幂等更新。
+      const delivered = await assignCardSecretsForOrder(client, order);
+      await client.query(
+        `
+          UPDATE orders
+          SET status = 'paid',
+              trade_no = COALESCE(trade_no, $2),
+              raw_notify = CASE WHEN $4 = 'notify' THEN $3::jsonb ELSE raw_notify END,
+              query_response = CASE WHEN $4 = 'query' THEN $3::jsonb ELSE query_response END,
+              query_checked_at = CASE WHEN $4 = 'query' THEN NOW() ELSE query_checked_at END,
+              paid_at = COALESCE(paid_at, NOW()),
+              fulfillment_status = $5,
+              fulfilled_at = CASE WHEN $5 = 'delivered' THEN COALESCE(fulfilled_at, NOW()) ELSE fulfilled_at END
+          WHERE out_trade_no = $1
+        `,
+        [outTradeNo, tradeNo, JSON.stringify(rawPayload), source, delivered ? "delivered" : "failed"],
+      );
+      await client.query(
+        `
+          UPDATE products
+          SET sold_count = sold_count + $2,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [order.product_id, order.quantity],
+      );
+    } else if (source === "query") {
+      await client.query(
+        `
+          UPDATE orders
+          SET query_response = $2::jsonb, query_checked_at = NOW()
+          WHERE out_trade_no = $1
+        `,
+        [outTradeNo, JSON.stringify(rawPayload)],
+      );
+    }
+
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function markOrderFromPayment(payload: MapayPayload) {
+  if (
+    payload.trade_status !== "TRADE_SUCCESS" ||
+    !payload.out_trade_no ||
+    !payload.money
+  ) {
+    return false;
+  }
+
+  return markOrderPaid(
+    payload.out_trade_no,
+    payload.money,
+    payload.trade_no || null,
+    payload,
+    "notify",
+  );
+}
+
+export async function markOrderFromQuery(result: MapayQueryResult) {
+  if (
+    Number(result.code) !== 1 ||
+    Number(result.status) !== 1 ||
+    !result.out_trade_no ||
+    !result.money
+  ) {
+    return false;
+  }
+
+  return markOrderPaid(
+    result.out_trade_no,
+    result.money,
+    result.trade_no || null,
+    result,
+    "query",
+  );
+}
+
+export async function recordOrderQuery(outTradeNo: string, result: MapayQueryResult) {
+  await ensureStoreSchema();
+  await getPool().query(
+    `
+      UPDATE orders
+      SET query_response = $2::jsonb, query_checked_at = NOW()
+      WHERE out_trade_no = $1
+    `,
+    [outTradeNo, JSON.stringify(result)],
+  );
 }

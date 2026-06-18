@@ -6,6 +6,10 @@ async function handleNotify(request: Request) {
   const payload = await parseMapayPayload(request);
 
   if (!verifyMapayPayload(payload)) {
+    console.warn("Mapay notify signature rejected", {
+      out_trade_no: payload.out_trade_no,
+      pid: payload.pid,
+    });
     return new NextResponse("fail", { status: 400 });
   }
 

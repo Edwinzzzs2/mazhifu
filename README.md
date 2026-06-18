@@ -12,6 +12,9 @@
 - `MAPAY_CHANNEL_ID`: 可选，码支付后台指定通道 ID
 - `MAPAY_DEVICE`: 可选，设备类型，例如 `pc`、`mobile`、`alipay`
 - `APP_URL`: 支付回调可访问的站点地址，本地调试为 `http://localhost:3000`
+- `ADMIN_PASSWORD`: 后台登录密码
+- `ADMIN_SESSION_SECRET`: 后台登录 Cookie 签名密钥
+- `CARD_SECRET_ENCRYPTION_KEY`: 卡密加密密钥，配置后不要更换，否则旧卡密无法解密
 - `POSTGRES_*`: PG 连接信息
 
 ## 本地运行
@@ -27,3 +30,12 @@ npm run dev
 - 页面跳转：`/pay/return`
 
 异步通知验签成功且 `trade_status=TRADE_SUCCESS` 后会把订单状态更新为 `paid`，并返回 `success` 给码支付。
+
+## 后台与卡密
+
+- 后台地址：`/admin`
+- 登录方式：只需要输入 `ADMIN_PASSWORD`
+- 商品库存来自可用卡密数量，不能手工改库存
+- 卡密导入支持手工粘贴、TXT 文件和 CSV 文件；TXT 按一行一张卡密，CSV 读取每行第一列
+
+下单时会先预占卡密，订单过期会释放预占；支付成功后会把预占卡密标记为已售，并在订单页展示给用户。

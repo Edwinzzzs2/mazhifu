@@ -3,26 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Aptos", "Segoe UI", sans-serif;
-  --font-display: "Georgia", "Times New Roman", serif;
+  --font-sans: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  --font-display: "Microsoft YaHei UI", "Segoe UI", sans-serif;
 
-  --background: 84 29% 96%;
-  --foreground: 212 30% 11%;
+  --background: 198 100% 97%;
+  --foreground: 221 38% 15%;
   --card: 0 0% 100%;
-  --card-foreground: 212 30% 11%;
-  --primary: 174 80% 27%;
+  --card-foreground: 221 38% 15%;
+  --primary: 198 88% 48%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 26 92% 92%;
-  --secondary-foreground: 18 57% 23%;
-  --muted: 84 15% 88%;
-  --muted-foreground: 212 12% 41%;
-  --accent: 8 86% 59%;
+  --secondary: 199 90% 94%;
+  --secondary-foreground: 204 82% 31%;
+  --muted: 203 55% 93%;
+  --muted-foreground: 216 17% 43%;
+  --accent: 157 79% 42%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 75% 49%;
   --destructive-foreground: 0 0% 100%;
-  --border: 212 18% 78%;
-  --input: 212 18% 78%;
-  --ring: 174 80% 27%;
+  --border: 198 76% 87%;
+  --input: 198 76% 87%;
+  --ring: 198 88% 48%;
   --radius: 8px;
 }
 
@@ -30,15 +30,23 @@
   border-color: hsl(var(--border));
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   min-height: 100vh;
   color: hsl(var(--foreground));
   background:
-    linear-gradient(90deg, hsl(84 29% 96%) 21px, transparent 1%) center,
-    linear-gradient(hsl(84 29% 96%) 21px, transparent 1%) center,
-    hsl(82 18% 90%);
-  background-size: 22px 22px;
+    linear-gradient(180deg, hsl(198 100% 97%) 0%, hsl(202 92% 95%) 100%);
   font-family: var(--font-sans);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 ::selection {
@@ -46,8 +54,105 @@ body {
   background: hsl(var(--primary));
 }
 
-.shop-frame {
-  border: 1px solid hsl(var(--foreground));
-  background: hsl(var(--background) / 0.86);
-  box-shadow: 10px 10px 0 hsl(var(--foreground) / 0.12);
+@layer components {
+  .category-button {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    align-items: center;
+    width: 100%;
+    min-height: 48px;
+    gap: 10px;
+    border-radius: 8px;
+    padding: 0 12px;
+    color: rgb(100 116 139);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+    transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+  }
+
+  .category-button:hover {
+    background: rgb(240 249 255);
+    color: rgb(14 165 233);
+  }
+
+  .category-button.is-active {
+    background: rgb(14 165 233);
+    color: white;
+    box-shadow: 0 10px 24px rgba(14, 165, 233, 0.22);
+  }
+
+  .category-button span {
+    display: grid;
+    min-width: 26px;
+    height: 24px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.18);
+    font-size: 12px;
+  }
+
+  .category-button.is-active span {
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .product-card {
+    overflow: hidden;
+    min-height: 360px;
+    border: 1px solid rgb(186 230 253);
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 12px 30px rgba(14, 116, 144, 0.08);
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .product-card:hover {
+    transform: translateY(-3px);
+    border-color: rgb(14 165 233);
+    box-shadow: 0 20px 42px rgba(14, 116, 144, 0.14);
+  }
+
+  .form-control,
+  .admin-input {
+    width: 100%;
+    border: 1px solid rgb(186 230 253);
+    border-radius: 8px;
+    background: rgb(240 249 255);
+    padding: 10px 12px;
+    color: rgb(15 23 42);
+    outline: none;
+    transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  }
+
+  .form-control:focus,
+  .admin-input:focus {
+    border-color: rgb(14 165 233);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+  }
+
+  .payment-choice {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgb(186 230 253);
+    border-radius: 8px;
+    background: white;
+    padding: 0 12px;
+    font-weight: 700;
+    color: rgb(51 65 85);
+    transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+  }
+
+  .payment-choice:hover,
+  .payment-choice.is-active {
+    border-color: rgb(14 165 233);
+    background: rgb(240 249 255);
+    color: rgb(2 132 199);
+  }
+
+  .shadow-crisp {
+    box-shadow: 0 18px 45px rgba(14, 116, 144, 0.12);
+  }
 }
