@@ -5,15 +5,18 @@ import {
   ExternalLink,
   LogOut,
   Package,
+  Settings2,
   Store,
   Warehouse,
 } from "lucide-react";
 import { AdminCardInventory } from "@/components/admin-card-inventory";
 import { AdminOrderList } from "@/components/admin-order-list";
 import { AdminProductManager } from "@/components/admin-product-manager";
+import { AdminSiteSettings } from "@/components/admin-site-settings";
 import { Button } from "@/components/ui/button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { listCategories, listProducts } from "@/lib/products";
+import { getSiteSettings } from "@/lib/site-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,7 @@ const TABS = [
   { key: "products", label: "商品管理", icon: Package },
   { key: "inventory", label: "库存管理", icon: Warehouse },
   { key: "orders", label: "订单管理", icon: ClipboardList },
+  { key: "settings", label: "系统设置", icon: Settings2 },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
@@ -48,9 +52,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ? (searchParams!.tab as Tab)
       : "products";
 
-  const [categories, products] = await Promise.all([
+  const [categories, products, siteSettings] = await Promise.all([
     listCategories(true),
     listProducts(true),
+    getSiteSettings(),
   ]);
 
   return (
@@ -62,7 +67,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white">
             <Store className="h-4 w-4" />
           </span>
-          <span>码付小铺后台</span>
+          <span>{siteSettings.site_name}后台</span>
         </div>
 
         {/* Nav */}
@@ -125,6 +130,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         )}
         {tab === "inventory" && <AdminCardInventory products={products} />}
         {tab === "orders" && <AdminOrderList />}
+        {tab === "settings" && <AdminSiteSettings initial_settings={siteSettings} />}
       </main>
     </div>
   );

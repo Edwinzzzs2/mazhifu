@@ -83,6 +83,12 @@ async function initializeStoreSchema() {
       CONSTRAINT card_secrets_status_check CHECK (status IN ('available', 'reserved', 'used'))
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS orders_trade_no_unique
       ON orders (trade_no)
       WHERE trade_no IS NOT NULL;
@@ -96,6 +102,30 @@ async function initializeStoreSchema() {
       ON card_secrets (product_id, status, id);
     CREATE INDEX IF NOT EXISTS card_secrets_order_status_idx
       ON card_secrets (order_no, status);
+
+    INSERT INTO settings (key, value)
+    VALUES (
+      'site',
+      jsonb_build_object(
+        'site_name', '码付小铺',
+        'site_description', '安全、自动发货的码支付卡密小铺',
+        'site_logo_url', '',
+        'site_icon_url', '',
+        'announcement', '',
+        'contact_email', '',
+        'contact_text', '遇到问题请保留订单号，并通过商家公布的联系方式处理。',
+        'seo_title', '',
+        'seo_keywords', '码支付,卡密,自动发货',
+        'mapay_sitename', '',
+        'notice_items', jsonb_build_array(
+          '本站商品用于合法业务测试，请按商品说明购买。',
+          '支付状态由服务端验签确认，页面跳转不代表到账。',
+          '订单有效期内完成支付，超时后请重新下单。',
+          '遇到问题请保留订单号，切勿泄露订单访问链接。'
+        )
+      )
+    )
+    ON CONFLICT (key) DO NOTHING;
 
     INSERT INTO categories (name, slug, sort_order)
     VALUES

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSiteSettingsSafe } from "@/lib/site-settings";
 
 type AdminLoginPageProps = {
   searchParams?: {
@@ -9,9 +10,12 @@ type AdminLoginPageProps = {
   };
 };
 
-export default function AdminLoginPage({ searchParams }: AdminLoginPageProps) {
+export const dynamic = "force-dynamic";
+
+export default async function AdminLoginPage({ searchParams }: AdminLoginPageProps) {
   let configured = true;
   let authenticated = false;
+  const siteSettings = await getSiteSettingsSafe();
 
   try {
     authenticated = isAdminAuthenticated();
@@ -31,7 +35,7 @@ export default function AdminLoginPage({ searchParams }: AdminLoginPageProps) {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-sky-600">后台登录</div>
-            <h1 className="mt-1 text-2xl font-bold">码付小铺管理台</h1>
+            <h1 className="mt-1 text-2xl font-bold">{siteSettings.site_name}管理台</h1>
           </div>
           <LockKeyhole className="h-10 w-10 text-sky-500" />
         </div>

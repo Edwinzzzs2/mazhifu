@@ -8,6 +8,7 @@ type BuildMapaySubmitUrlOptions = {
   pay_type: string;
   request_origin: string;
   access_token: string;
+  site_name?: string;
 };
 
 export type MapayQueryResult = {
@@ -64,6 +65,7 @@ export function buildMapaySubmitUrl({
   pay_type,
   request_origin,
   access_token,
+  site_name,
 }: BuildMapaySubmitUrlOptions) {
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
@@ -80,7 +82,7 @@ export function buildMapaySubmitUrl({
     return_url: returnUrl.toString(),
     name: order.product_name,
     money: Number(order.money).toFixed(2),
-    sitename: process.env.MAPAY_SITENAME || "码支付卡密铺",
+    sitename: process.env.MAPAY_SITENAME || site_name || "码付小铺",
     param: order.product_id,
     channel_id: process.env.MAPAY_CHANNEL_ID || "",
     device: process.env.MAPAY_DEVICE || "",

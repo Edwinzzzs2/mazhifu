@@ -1,10 +1,22 @@
 import type { Metadata } from "next";
+import { getSiteSettingsSafe } from "@/lib/site-settings";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "码支付卡密铺",
-  description: "Next.js + shadcn 风格组件的码支付卡密铺",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettingsSafe();
+  const title = settings.seo_title || settings.site_name;
+
+  return {
+    title,
+    description: settings.site_description,
+    keywords: settings.seo_keywords
+      ? settings.seo_keywords.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
+      : undefined,
+    icons: {
+      icon: settings.site_icon_url || "/icon.svg",
+    },
+  };
+}
 
 export default function RootLayout({
   children,
