@@ -25,6 +25,17 @@ export type MapayQueryResult = {
   [key: string]: unknown;
 };
 
+export const MAPAY_QUERY_TIMEOUT_MS = 3000;
+
+export function isAbortError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
 function getRequiredEnv(name: string) {
   const value = process.env[name];
 
@@ -105,7 +116,7 @@ export async function queryMapayOrder(outTradeNo: string) {
   queryUrl.searchParams.set("out_trade_no", outTradeNo);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
+  const timeout = setTimeout(() => controller.abort(), MAPAY_QUERY_TIMEOUT_MS);
   const response = await fetch(queryUrl, {
     method: "GET",
     cache: "no-store",

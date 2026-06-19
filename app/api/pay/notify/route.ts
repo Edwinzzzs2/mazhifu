@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { markOrderFromPayment, markOrderFromQuery, retryOrderFulfillment } from "@/lib/orders";
-import { parseMapayPayload, queryMapayOrder, verifyMapayPayload } from "@/lib/mapay";
+import {
+  MAPAY_QUERY_TIMEOUT_MS,
+  isAbortError,
+  parseMapayPayload,
+  queryMapayOrder,
+  verifyMapayPayload,
+} from "@/lib/mapay";
 
 async function handleNotify(request: Request) {
   const payload = await parseMapayPayload(request);
@@ -51,7 +57,14 @@ async function handleNotify(request: Request) {
     // ③ 回查确认：以主动查询结果为准更新订单状态
     await markOrderFromQuery(queryResult);
   } catch (err) {
-    console.error("Mapay double-check query failed, falling back to notify payload", err);
+    if (isAbortError(err)) {
+      console.warn("Mapay double-check query timed out; falling back to notify payload", {
+        out_trade_no: outTradeNo,
+        timeout_ms: MAPAY_QUERY_TIMEOUT_MS,
+      });
+    } else {
+      console.error("Mapay double-check query failed, falling back to notify payload", err);
+    }
     // 回查超时/失败：退回直接信任 webhook（不能因为回查失败就拒绝通知）
     const updated = await markOrderFromPayment(payload);
     if (updated) {

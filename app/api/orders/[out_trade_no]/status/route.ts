@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { queryMapayOrder } from "@/lib/mapay";
+import { MAPAY_QUERY_TIMEOUT_MS, isAbortError, queryMapayOrder } from "@/lib/mapay";
 import {
   getOrderViewByQueryAuth,
   getOrderViewInternal,
@@ -72,13 +72,9 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
     return NextResponse.json(formatOrderResponse(order));
   }
 
-  // 异步回查码支付，设 4 秒超时（不让整个请求卡太久）
+  // 异步回查码支付，超时由 queryMapayOrder 控制，避免整个请求卡太久。
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-
     const result = await queryMapayOrder(order.out_trade_no);
-    clearTimeout(timeout);
 
     await recordOrderQuery(order.out_trade_no, result);
 
@@ -99,7 +95,14 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
     order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
   } catch (error) {
     // 码支付查询失败/超时 — 不影响返回，先返回数据库中的当前状态
-    console.error("Mapay reconciliation failed (returning cached status)", error);
+    if (isAbortError(error)) {
+      console.warn("Mapay reconciliation timed out; returning cached order status", {
+        out_trade_no: order.out_trade_no,
+        timeout_ms: MAPAY_QUERY_TIMEOUT_MS,
+      });
+    } else {
+      console.error("Mapay reconciliation failed (returning cached status)", error);
+    }
   }
 
   return NextResponse.json(formatOrderResponse(order));
