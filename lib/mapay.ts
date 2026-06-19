@@ -48,7 +48,12 @@ function getRequiredEnv(name: string) {
 }
 
 function getAppUrl(requestOrigin: string) {
-  return process.env.APP_URL || requestOrigin;
+  const appUrl = process.env.APP_URL ?? "";
+  // 跳过 localhost 配置，使用请求来源
+  if (appUrl && !appUrl.includes("localhost") && !appUrl.includes("127.0.0.1")) {
+    return appUrl.replace(/\/+$/, "");
+  }
+  return requestOrigin;
 }
 
 export function createMapaySign(params: MapayPayload, key: string) {

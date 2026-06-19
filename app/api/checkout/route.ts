@@ -8,9 +8,36 @@ const PAY_TYPES = new Set(["alipay", "wxpay"]);
 
 function getRequestOrigin() {
   const headerList = headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
-  const protocol = headerList.get("x-forwarded-proto") ?? "http";
-  return protocol + "://" + host;
+
+  // 打印代理相关头，方便调试
+  console.log("[getRequestOrigin] headers:", {
+    "host": headerList.get("host"),
+    "x-forwarded-host": headerList.get("x-forwarded-host"),
+    "x-forwarded-proto": headerList.get("x-forwarded-proto"),
+    "x-forwarded-for": headerList.get("x-forwarded-for"),
+    "x-real-ip": headerList.get("x-real-ip"),
+    "APP_URL": process.env.APP_URL ?? "(未设置)",
+  });
+
+  // 优先使用 APP_URL 环境变量（如果设置了且不是 localhost）
+  const appUrl = process.env.APP_URL ?? "";
+  if (appUrl && !appUrl.includes("localhost") && !appUrl.includes("127.0.0.1")) {
+    const origin = appUrl.replace(/\/+$/, "");
+    console.log("[getRequestOrigin] 使用 APP_URL:", origin);
+    return origin;
+  }
+
+  // 否则从请求头自动检测
+  const host =
+    headerList.get("x-forwarded-host") ??
+    headerList.get("host") ??
+    "localhost:3000";
+  const protocol =
+    headerList.get("x-forwarded-proto") ??
+    (host.includes("localhost") ? "http" : "https");
+  const origin = protocol + "://" + host;
+  console.log("[getRequestOrigin] 使用请求头:", origin);
+  return origin;
 }
 
 export async function POST(request: Request) {
