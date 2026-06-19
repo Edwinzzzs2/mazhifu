@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
@@ -14,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
 import { getOrderViewWithAccess } from "@/lib/orders";
+import { getRequestOrigin } from "@/lib/request-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +25,6 @@ type PayPageProps = {
     token?: string;
   };
 };
-
-function getRequestOrigin() {
-  const headerList = headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
-  const protocol = headerList.get("x-forwarded-proto") ?? "http";
-  return protocol + "://" + host;
-}
 
 export default async function PayPage({ params, searchParams }: PayPageProps) {
   const accessToken = searchParams?.token ?? "";

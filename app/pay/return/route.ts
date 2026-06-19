@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { parseMapayPayload } from "@/lib/mapay";
+import { getRequestOrigin } from "@/lib/request-utils";
 
 export async function GET(request: Request) {
   const payload = await parseMapayPayload(request);
   const outTradeNo = payload.out_trade_no;
   const token = new URL(request.url).searchParams.get("token") ?? "";
+  const origin = getRequestOrigin();
+  
   const redirectUrl = new URL(
     outTradeNo ? `/orders/${encodeURIComponent(outTradeNo)}` : "/",
-    request.url,
+    origin,
   );
 
   if (token) {
