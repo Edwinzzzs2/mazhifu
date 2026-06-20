@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { parseMapayPayload } from "@/lib/mapay";
+import { parseMapayPayload, readMapayRequestSnapshot } from "@/lib/mapay";
 import { getRequestOrigin } from "@/lib/request-utils";
 
 export async function GET(request: Request) {
+  const requestSnapshot = await readMapayRequestSnapshot(request);
   const payload = await parseMapayPayload(request);
+  console.log("[mapay:return] callback received", {
+    ...requestSnapshot,
+    payload,
+  });
+
   const outTradeNo = payload.out_trade_no;
   const token = new URL(request.url).searchParams.get("token") ?? "";
   const origin = getRequestOrigin();

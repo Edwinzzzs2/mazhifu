@@ -28,6 +28,14 @@ export type MapayQueryResult = {
 
 export const MAPAY_QUERY_TIMEOUT_MS = 8000;
 
+export type MapayRequestSnapshot = {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  raw_query: string;
+  raw_body: string;
+};
+
 export function isAbortError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -54,6 +62,31 @@ function getAppUrl(requestOrigin: string) {
     return appUrl.replace(/\/+$/, "");
   }
   return requestOrigin;
+}
+
+function redactMapayQueryUrl(url: URL) {
+  const safeUrl = new URL(url.toString());
+  if (safeUrl.searchParams.has("key")) {
+    safeUrl.searchParams.set("key", "[redacted]");
+  }
+  return safeUrl.toString();
+}
+
+export async function readMapayRequestSnapshot(request: Request): Promise<MapayRequestSnapshot> {
+  const url = new URL(request.url);
+  let rawBody = "";
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    rawBody = await request.clone().text();
+  }
+
+  return {
+    method: request.method,
+    url: request.url,
+    headers: Object.fromEntries(request.headers.entries()),
+    raw_query: url.search,
+    raw_body: rawBody,
+  };
 }
 
 export function createMapaySign(params: MapayPayload, key: string) {
@@ -122,6 +155,12 @@ export async function queryMapayOrder(outTradeNo: string) {
   queryUrl.searchParams.set("key", key);
   queryUrl.searchParams.set("out_trade_no", outTradeNo);
 
+  console.log("[mapay:query] request", {
+    out_trade_no: outTradeNo,
+    url: redactMapayQueryUrl(queryUrl),
+    timeout_ms: MAPAY_QUERY_TIMEOUT_MS,
+  });
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MAPAY_QUERY_TIMEOUT_MS);
   const response = await fetch(queryUrl, {
@@ -129,11 +168,27 @@ export async function queryMapayOrder(outTradeNo: string) {
     cache: "no-store",
     signal: controller.signal,
   }).finally(() => clearTimeout(timeout));
+  const responseText = await response.text();
+
+  console.log("[mapay:query] response", {
+    out_trade_no: outTradeNo,
+    status: response.status,
+    status_text: response.statusText,
+    headers: Object.fromEntries(response.headers.entries()),
+    raw_body: responseText,
+  });
+
   if (!response.ok) {
-    throw new Error(`Mapay query failed with HTTP ${response.status}`);
+    throw new Error(`Mapay query failed with HTTP ${response.status}: ${responseText}`);
   }
 
-  return (await response.json()) as MapayQueryResult;
+  const result = JSON.parse(responseText) as MapayQueryResult;
+  console.log("[mapay:query] parsed", {
+    out_trade_no: outTradeNo,
+    result,
+  });
+
+  return result;
 }
 
 export async function parseMapayPayload(request: Request): Promise<MapayPayload> {

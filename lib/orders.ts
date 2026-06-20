@@ -437,6 +437,15 @@ async function markOrderPaid(
 
     // 订单号和金额必须同时匹配，避免拿真实小额回调去撞大额订单。
     if (!order || Number(order.money).toFixed(2) !== Number(paidMoney).toFixed(2)) {
+      console.warn("[orders:payment] rejected payment update", {
+        out_trade_no: outTradeNo,
+        source,
+        paid_money: paidMoney,
+        trade_no: tradeNo,
+        order_found: Boolean(order),
+        expected_money: order?.money,
+        raw_payload: rawPayload,
+      });
       await client.query("ROLLBACK");
       return false;
     }
@@ -448,6 +457,13 @@ async function markOrderPaid(
         [tradeNo, outTradeNo],
       );
       if (duplicate.rowCount) {
+        console.warn("[orders:payment] rejected duplicate trade_no", {
+          out_trade_no: outTradeNo,
+          source,
+          trade_no: tradeNo,
+          duplicate_out_trade_no: duplicate.rows[0]?.out_trade_no,
+          raw_payload: rawPayload,
+        });
         await client.query("ROLLBACK");
         return false;
       }
@@ -480,6 +496,16 @@ async function markOrderPaid(
         `,
         [order.product_id, order.quantity],
       );
+      console.log("[orders:payment] marked order paid", {
+        out_trade_no: outTradeNo,
+        source,
+        trade_no: tradeNo,
+        product_id: order.product_id,
+        quantity: order.quantity,
+        delivered,
+        fulfillment_status: delivered ? "delivered" : "failed",
+        raw_payload: rawPayload,
+      });
     } else if (source === "query") {
       await client.query(
         `
@@ -489,6 +515,23 @@ async function markOrderPaid(
         `,
         [outTradeNo, JSON.stringify(rawPayload)],
       );
+      console.log("[orders:payment] refreshed paid order query payload", {
+        out_trade_no: outTradeNo,
+        source,
+        trade_no: tradeNo,
+        existing_status: order.status,
+        fulfillment_status: order.fulfillment_status,
+        raw_payload: rawPayload,
+      });
+    } else {
+      console.log("[orders:payment] duplicate paid callback accepted", {
+        out_trade_no: outTradeNo,
+        source,
+        trade_no: tradeNo,
+        existing_status: order.status,
+        fulfillment_status: order.fulfillment_status,
+        raw_payload: rawPayload,
+      });
     }
 
     await client.query("COMMIT");
@@ -507,6 +550,10 @@ export async function markOrderFromPayment(payload: MapayPayload) {
     !payload.out_trade_no ||
     !payload.money
   ) {
+    console.warn("[orders:payment] ignored notify payload", {
+      reason: "invalid notify status or missing fields",
+      payload,
+    });
     return false;
   }
 
@@ -526,6 +573,10 @@ export async function markOrderFromQuery(result: MapayQueryResult) {
     !result.out_trade_no ||
     !result.money
   ) {
+    console.warn("[orders:payment] ignored query result", {
+      reason: "invalid query status or missing fields",
+      result,
+    });
     return false;
   }
 
