@@ -139,22 +139,25 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
     <div className="min-h-screen bg-[#eef9ff] text-[#162238]">
       {/* ── Header ── */}
       <header className="sticky top-0 z-30 border-b border-sky-100 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-6">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:h-16 md:px-6">
           <a href="/" className="flex items-center gap-2 font-bold">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-sky-500 text-white">
-              <ShoppingBag className="h-5 w-5" />
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white md:h-9 md:w-9">
+              <ShoppingBag className="h-4 w-4 md:h-5 md:w-5" />
             </span>
-            <span className="text-xl">码付小铺</span>
+            <span className="text-lg md:text-xl">码付小铺</span>
           </a>
           <nav className="flex items-center gap-1">
-            <Button asChild variant="ghost">
+            <Button asChild variant="ghost" size="sm">
               <a href="/orders/query">
                 <Search className="h-4 w-4" />
-                查订单
+                <span className="hidden sm:inline">查订单</span>
               </a>
             </Button>
-            <Button asChild className="shadow-none">
-              <a href="/admin">管理后台</a>
+            <Button asChild size="sm" className="shadow-none">
+              <a href="/admin">
+                <span className="hidden sm:inline">管理后台</span>
+                <span className="sm:hidden">后台</span>
+              </a>
             </Button>
           </nav>
         </div>
@@ -193,52 +196,92 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
         </section>
 
         {/* ── Products ── */}
-        <section className="mx-auto max-w-7xl px-4 py-7 md:px-6">
-          <div className="mb-5 flex items-center justify-between">
+        <section className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
+          <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold">
               <PackageCheck className="h-5 w-5 text-sky-500" />
               商品分组
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-1.5 text-sm">
               <Grid2X2 className="h-4 w-4 text-sky-500" />
-              {filteredProducts.length} 件商品
+              {filteredProducts.length} 件
             </div>
           </div>
 
-          <div className="grid items-start gap-5 lg:grid-cols-[220px_1fr]">
-            <aside className="rounded-md border border-sky-100 bg-white p-2 lg:sticky lg:top-24">
-              <button
-                className={`category-button ${categoryId === "all" ? "is-active" : ""}`}
-                onClick={() => setCategoryId("all")}
-              >
-                <Box className="h-4 w-4" />
-                全部商品
-                <span>{products.length}</span>
-              </button>
-              {categories.map((category) => {
-                const count = products.filter((p) => p.category_id === category.id).length;
-                return (
-                  <button
-                    key={category.id}
-                    className={`category-button ${categoryId === category.id ? "is-active" : ""}`}
-                    onClick={() => setCategoryId(category.id)}
-                  >
-                    <Box className="h-4 w-4" />
-                    {category.name}
-                    <span>{count}</span>
-                  </button>
-                );
-              })}
+          {/* 手机端：横向滚动分类条；PC端：左侧竖排 */}
+          <div className="flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:grid-cols-[220px_1fr]">
+            {/* 手机：横向滚动；lg+：竖排侧边栏 */}
+            <aside className="lg:sticky lg:top-24">
+              {/* 手机横向滚动 */}
+              <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
+                <button
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    categoryId === "all"
+                      ? "border-sky-500 bg-sky-500 text-white"
+                      : "border-sky-200 bg-white text-slate-600"
+                  }`}
+                  onClick={() => setCategoryId("all")}
+                >
+                  全部
+                  <span className={`rounded-full px-1.5 text-xs ${
+                    categoryId === "all" ? "bg-white/25" : "bg-slate-100"
+                  }`}>{products.length}</span>
+                </button>
+                {categories.map((category) => {
+                  const count = products.filter((p) => p.category_id === category.id).length;
+                  return (
+                    <button
+                      key={category.id}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        categoryId === category.id
+                          ? "border-sky-500 bg-sky-500 text-white"
+                          : "border-sky-200 bg-white text-slate-600"
+                      }`}
+                      onClick={() => setCategoryId(category.id)}
+                    >
+                      {category.name}
+                      <span className={`rounded-full px-1.5 text-xs ${
+                        categoryId === category.id ? "bg-white/25" : "bg-slate-100"
+                      }`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* PC 竖排 */}
+              <div className="hidden rounded-md border border-sky-100 bg-white p-2 lg:block">
+                <button
+                  className={`category-button ${categoryId === "all" ? "is-active" : ""}`}
+                  onClick={() => setCategoryId("all")}
+                >
+                  <Box className="h-4 w-4" />
+                  全部商品
+                  <span>{products.length}</span>
+                </button>
+                {categories.map((category) => {
+                  const count = products.filter((p) => p.category_id === category.id).length;
+                  return (
+                    <button
+                      key={category.id}
+                      className={`category-button ${categoryId === category.id ? "is-active" : ""}`}
+                      onClick={() => setCategoryId(category.id)}
+                    >
+                      <Box className="h-4 w-4" />
+                      {category.name}
+                      <span>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </aside>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
               {filteredProducts.map((product) => (
                 <button
                   key={product.id}
                   className="product-card group text-left"
                   onClick={() => openProduct(product)}
                 >
-                  <div className="relative aspect-[16/9] overflow-hidden bg-sky-50">
+                  <div className="relative aspect-[4/3] overflow-hidden bg-sky-50 sm:aspect-[16/9]">
                     {product.image_url ? (
                       <img
                         src={product.image_url}
@@ -247,32 +290,32 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                       />
                     ) : (
                       <div className="grid h-full place-items-center bg-[linear-gradient(135deg,#effaff,#dff4ff)]">
-                        <ShoppingBag className="h-16 w-16 text-sky-400" strokeWidth={1.4} />
+                        <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-16 sm:w-16" strokeWidth={1.4} />
                       </div>
                     )}
                     {product.badge && (
-                      <span className="absolute left-3 top-3 rounded bg-rose-500 px-2 py-1 text-xs font-bold text-white">
+                      <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-xs font-bold text-white sm:left-3 sm:top-3">
                         {product.badge}
                       </span>
                     )}
                   </div>
-                  <div className="p-4">
-                    <h2 className="line-clamp-2 min-h-12 font-bold leading-6">{product.name}</h2>
-                    <p className="mt-1 line-clamp-1 text-sm text-slate-500">
+                  <div className="p-3 sm:p-4">
+                    <h2 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 sm:min-h-12 sm:text-base sm:leading-6">{product.name}</h2>
+                    <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-sm">
                       {product.subtitle || product.description}
                     </p>
-                    <div className="mt-4 flex items-end justify-between border-t border-dashed border-sky-100 pt-3">
+                    <div className="mt-3 flex items-end justify-between border-t border-dashed border-sky-100 pt-2 sm:mt-4 sm:pt-3">
                       <div>
-                        <span className="text-sm text-sky-500">¥</span>
-                        <span className="text-2xl font-bold text-sky-500">
+                        <span className="text-xs text-sky-500 sm:text-sm">¥</span>
+                        <span className="text-lg font-bold text-sky-500 sm:text-2xl">
                           {Number(product.price).toFixed(2)}
                         </span>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1" />
+                      <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1 sm:h-5 sm:w-5" />
                     </div>
-                    <div className="mt-3 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-xs text-slate-500">
-                      <span className="py-2">库存 {product.stock}</span>
-                      <span className="border-l border-slate-100 py-2">已售 {product.sold_count}</span>
+                    <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-xs text-slate-500 sm:mt-3">
+                      <span className="py-1.5">库存 {product.stock}</span>
+                      <span className="border-l border-slate-100 py-1.5">已售 {product.sold_count}</span>
                     </div>
                   </div>
                 </button>
@@ -290,13 +333,17 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
             className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm"
             onClick={closeDrawer}
           />
-          {/* Drawer panel */}
-          <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-4xl flex-col bg-white shadow-2xl">
+          {/* Drawer panel:
+               手机端：从底部弹出，圆角，最高 92vh
+               PC端：从右侧滑入，最宽 4xl */}
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-2xl bg-white shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:w-full sm:max-w-4xl sm:rounded-none">
+            {/* 手机拖拽把手 */}
+            <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide text-sky-500">商品详情</div>
-                <h2 className="mt-0.5 text-lg font-bold line-clamp-1">{selectedProduct.name}</h2>
+                <h2 className="mt-0.5 line-clamp-1 text-base font-bold sm:text-lg">{selectedProduct.name}</h2>
               </div>
               <button
                 onClick={closeDrawer}
@@ -308,7 +355,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
 
             {/* Drawer body */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Left: product info */}
+              {/* Left: product info（仅 lg+ 可见） */}
               <div className="hidden w-[55%] flex-col gap-5 overflow-y-auto border-r border-sky-100 bg-slate-50/50 p-6 lg:flex">
                 <div className="overflow-hidden rounded-lg bg-sky-50">
                   {selectedProduct.image_url ? (
@@ -360,7 +407,28 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                 onSubmit={(e) => { void handleCheckout(e); }}
                 className="flex flex-1 flex-col overflow-y-auto"
               >
-                <div className="flex-1 space-y-4 p-5">
+                <div className="flex-1 space-y-4 p-4 sm:p-5">
+                  {/* 手机端简要商品信息 */}
+                  <div className="flex items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 p-3 lg:hidden">
+                    {selectedProduct.image_url ? (
+                      <img
+                        src={selectedProduct.image_url}
+                        alt={selectedProduct.name}
+                        className="h-14 w-14 shrink-0 rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-sky-100">
+                        <ShoppingBag className="h-6 w-6 text-sky-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="line-clamp-1 font-bold">{selectedProduct.name}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        库存 {selectedProduct.stock} 件 · ¥{Number(selectedProduct.price).toFixed(2)}/件
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Email */}
                   <label className="block text-sm font-semibold">
                     联系方式 / 邮箱
@@ -429,23 +497,23 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                 </div>
 
                 {/* Sticky footer */}
-                <div className="shrink-0 border-t border-sky-100 bg-white p-5">
+                <div className="shrink-0 border-t border-sky-100 bg-white p-4 sm:p-5">
                   {/* Quantity + total */}
-                  <div className="mb-4 flex items-center justify-between gap-4">
-                    <div className="flex h-10 items-center overflow-hidden rounded-md border border-sky-200">
+                  <div className="mb-3 flex items-center justify-between gap-4 sm:mb-4">
+                    <div className="flex h-11 items-center overflow-hidden rounded-md border border-sky-200">
                       <button
                         type="button"
-                        className="grid h-full w-10 place-items-center hover:bg-sky-50"
+                        className="grid h-full w-11 place-items-center hover:bg-sky-50 active:bg-sky-100"
                         onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       >
                         <Minus className="h-4 w-4" />
                       </button>
-                      <span className="grid h-full w-10 place-items-center border-x border-sky-200 text-sm font-semibold">
+                      <span className="grid h-full w-11 place-items-center border-x border-sky-200 text-sm font-semibold">
                         {quantity}
                       </span>
                       <button
                         type="button"
-                        className="grid h-full w-10 place-items-center hover:bg-sky-50"
+                        className="grid h-full w-11 place-items-center hover:bg-sky-50 active:bg-sky-100"
                         onClick={() =>
                           setQuantity((q) => Math.max(1, Math.min(10, selectedProduct.stock, q + 1)))
                         }
@@ -455,7 +523,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-slate-400">合计</div>
-                      <div className="text-2xl font-bold text-sky-500">
+                      <div className="text-xl font-bold text-sky-500 sm:text-2xl">
                         ¥{(Number(selectedProduct.price) * quantity).toFixed(2)}
                       </div>
                     </div>
@@ -465,7 +533,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                     type="submit"
                     size="lg"
                     disabled={selectedProduct.stock < 1 || checkingOut}
-                    className="w-full bg-emerald-500 shadow-none hover:bg-emerald-600"
+                    className="h-12 w-full bg-emerald-500 text-base shadow-none hover:bg-emerald-600"
                   >
                     {checkingOut ? "正在下单…" : "立即下单"}
                   </Button>
@@ -569,8 +637,8 @@ function OrderTrackingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-sky-100 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="w-full max-w-lg overflow-y-auto rounded-t-2xl border border-sky-100 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-xl" style={{maxHeight: '90dvh'}}>
         {/* Modal header */}
         <div className="flex items-start justify-between border-b border-sky-100 px-5 py-4">
           <div>

@@ -268,20 +268,71 @@ export function AdminOrderList() {
         {/* 搜索 */}
         <form onSubmit={handleSearch} className="flex gap-2">
           <input
-            className="admin-input h-9 w-52 text-sm"
+            className="admin-input h-9 w-full text-sm sm:w-52"
             placeholder="订单号 / 联系方式"
             value={inputQ}
             onChange={(e) => setInputQ(e.target.value)}
           />
-          <Button type="submit" variant="outline" size="sm">
+          <Button type="submit" variant="outline" size="sm" className="shrink-0">
             <Search className="h-4 w-4" />
           </Button>
         </form>
       </div>
 
-      {/* 订单表格 */}
+      {/* 订单列表 */}
       <div className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* 手机卡片视图 */}
+        <div className="divide-y divide-sky-50 md:hidden">
+          {orders.length === 0 ? (
+            <div className="px-4 py-10 text-center text-slate-400">
+              {loading ? "正在加载…" : "暂无订单"}
+            </div>
+          ) : (
+            orders.map((order) => (
+              <>
+                <div
+                  key={order.out_trade_no}
+                  className="cursor-pointer px-4 py-3 active:bg-sky-50/60"
+                  onClick={() => toggleExpand(order.out_trade_no)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {expandedId === order.out_trade_no ? (
+                          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        )}
+                        <span className="truncate font-mono text-xs text-slate-400">{order.out_trade_no}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="line-clamp-1 text-sm font-semibold">{order.product_name}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span className="font-semibold text-sky-700">¥{order.money}</span>
+                        <span>×{order.quantity}</span>
+                        {order.contact && <span className="truncate max-w-[120px]">{order.contact}</span>}
+                        <span>{formatDate(order.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <StatusPill value={order.status} map={STATUS_LABELS} />
+                      <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
+                    </div>
+                  </div>
+                </div>
+                {expandedId === order.out_trade_no && (
+                  <div key={`${order.out_trade_no}-detail`}>
+                    <OrderDetailPanel outTradeNo={order.out_trade_no} />
+                  </div>
+                )}
+              </>
+            ))
+          )}
+        </div>
+
+        {/* PC 表格视图 */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[860px] border-collapse bg-white text-sm">
             <thead className="bg-sky-50 text-left text-xs uppercase text-slate-500">
               <tr>

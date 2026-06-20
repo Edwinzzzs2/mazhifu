@@ -13,7 +13,6 @@ import { AdminCardInventory } from "@/components/admin-card-inventory";
 import { AdminOrderList } from "@/components/admin-order-list";
 import { AdminProductManager } from "@/components/admin-product-manager";
 import { AdminSiteSettings } from "@/components/admin-site-settings";
-import { Button } from "@/components/ui/button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { listCategories, listProducts } from "@/lib/products";
 import { getSiteSettings } from "@/lib/site-settings";
@@ -21,11 +20,18 @@ import { getSiteSettings } from "@/lib/site-settings";
 export const dynamic = "force-dynamic";
 
 const TABS = [
-  { key: "products", label: "商品管理", icon: Package },
-  { key: "inventory", label: "库存管理", icon: Warehouse },
-  { key: "orders", label: "订单管理", icon: ClipboardList },
-  { key: "settings", label: "系统设置", icon: Settings2 },
+  { key: "products", label: "商品", icon: Package },
+  { key: "inventory", label: "库存", icon: Warehouse },
+  { key: "orders", label: "订单", icon: ClipboardList },
+  { key: "settings", label: "设置", icon: Settings2 },
 ] as const;
+
+const TAB_LABELS: Record<string, string> = {
+  products: "商品管理",
+  inventory: "库存管理",
+  orders: "订单管理",
+  settings: "系统设置",
+};
 
 type Tab = (typeof TABS)[number]["key"];
 
@@ -60,19 +66,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   return (
     <div className="flex min-h-screen bg-[#eef9ff] text-[#162238]">
-      {/* ── Sidebar ── */}
-      <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-sky-100 bg-white">
+      {/* ── Sidebar（PC 可见，手机隐藏）── */}
+      <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-56 md:shrink-0 md:flex-col md:border-r md:border-sky-100 md:bg-white">
         {/* Logo */}
         <div className="flex h-16 items-center gap-2.5 border-b border-sky-100 px-4 font-bold">
           <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white">
             <Store className="h-4 w-4" />
           </span>
-          <span>{siteSettings.site_name}后台</span>
+          <span className="truncate">{siteSettings.site_name}后台</span>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 space-y-0.5 p-2">
-          {TABS.map(({ key, label, icon: Icon }) => (
+          {TABS.map(({ key, label: shortLabel, icon: Icon }) => (
             <Link
               key={key}
               href={`/admin?tab=${key}`}
@@ -83,7 +89,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              {label}
+              {TAB_LABELS[key] ?? shortLabel}
             </Link>
           ))}
         </nav>
@@ -111,17 +117,37 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="min-w-0 flex-1 px-6 py-6">
+      <main className="min-w-0 flex-1 px-3 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
         {/* Page title */}
-        <div className="mb-6">
-          {TABS.map(({ key, label, icon: Icon }) =>
-            tab === key ? (
-              <div key={key} className="flex items-center gap-2">
-                <Icon className="h-5 w-5 text-sky-500" />
-                <h1 className="text-xl font-bold">{label}</h1>
-              </div>
-            ) : null,
-          )}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {TABS.map(({ key, icon: Icon }) =>
+              tab === key ? (
+                <div key={key} className="flex items-center gap-2">
+                  <Icon className="h-5 w-5 text-sky-500" />
+                  <h1 className="text-lg font-bold md:text-xl">{TAB_LABELS[key]}</h1>
+                </div>
+              ) : null,
+            )}
+          </div>
+          {/* 手机端顶部快捷入口 */}
+          <div className="flex items-center gap-2 md:hidden">
+            <Link
+              href="/"
+              target="_blank"
+              className="grid h-9 w-9 place-items-center rounded-md border border-sky-200 bg-white text-slate-500"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Link>
+            <form action="/api/admin/logout" method="post">
+              <button
+                type="submit"
+                className="grid h-9 w-9 place-items-center rounded-md border border-sky-200 bg-white text-slate-500"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Tab content */}
@@ -132,6 +158,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {tab === "orders" && <AdminOrderList />}
         {tab === "settings" && <AdminSiteSettings initial_settings={siteSettings} />}
       </main>
+
+      {/* ── 手机底部 Tab 栏 ── */}
+      <nav className="admin-bottom-nav md:hidden">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <Link
+            key={key}
+            href={`/admin?tab=${key}`}
+            className={tab === key ? "is-active" : ""}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

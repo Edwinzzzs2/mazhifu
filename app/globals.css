@@ -28,6 +28,8 @@
 
 * {
   border-color: hsl(var(--border));
+  /* 防止 iOS 点击 input 时缩放 */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
@@ -40,6 +42,8 @@ body {
   background:
     linear-gradient(180deg, hsl(198 100% 97%) 0%, hsl(202 92% 95%) 100%);
   font-family: var(--font-sans);
+  /* 防止 iOS Safari 双击缩放 */
+  touch-action: manipulation;
 }
 
 button,
@@ -47,6 +51,9 @@ input,
 select,
 textarea {
   font-family: inherit;
+  /* 防止 iOS 在 focus 时自动放大字体（需要 font-size >= 16px 才不会触发）
+     这里用 inherit 并在 .form-control 中保证 font-size 不小于 16px */
+  font-size: inherit;
 }
 
 ::selection {
@@ -60,7 +67,7 @@ textarea {
     grid-template-columns: 18px 1fr auto;
     align-items: center;
     width: 100%;
-    min-height: 48px;
+    min-height: 44px;
     gap: 10px;
     border-radius: 8px;
     padding: 0 12px;
@@ -98,7 +105,7 @@ textarea {
 
   .product-card {
     overflow: hidden;
-    min-height: 360px;
+    min-height: 320px;
     border: 1px solid rgb(186 230 253);
     border-radius: 8px;
     background: white;
@@ -118,6 +125,8 @@ textarea {
     border: 1px solid rgb(186 230 253);
     border-radius: 8px;
     background: rgb(240 249 255);
+    /* iOS 16px+ 防止 focus 时自动缩放 */
+    font-size: 16px;
     padding: 10px 12px;
     color: rgb(15 23 42);
     outline: none;
@@ -133,7 +142,7 @@ textarea {
 
   .payment-choice {
     display: flex;
-    min-height: 46px;
+    min-height: 48px;
     align-items: center;
     gap: 8px;
     border: 1px solid rgb(186 230 253);
@@ -155,4 +164,41 @@ textarea {
   .shadow-crisp {
     box-shadow: 0 18px 45px rgba(14, 116, 144, 0.12);
   }
+
+  /* 管理后台底部 Tab 导航（手机专用） */
+  .admin-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    background: white;
+    border-top: 1px solid rgb(186 230 253);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .admin-bottom-nav a,
+  .admin-bottom-nav button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgb(148 163 184);
+    transition: color 150ms ease;
+    border: none;
+    background: transparent;
+    min-height: 56px;
+  }
+
+  .admin-bottom-nav a.is-active,
+  .admin-bottom-nav a.is-active svg {
+    color: rgb(14 165 233);
+  }
 }
+

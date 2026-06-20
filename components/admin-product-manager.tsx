@@ -175,7 +175,7 @@ export function AdminProductManager({
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+    <div className="grid gap-4 lg:gap-5 lg:grid-cols-[320px_1fr]">
       <aside className="rounded-lg border border-sky-100 bg-white p-4 shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -191,7 +191,7 @@ export function AdminProductManager({
           新增商品
         </Button>
 
-        <div className="max-h-[calc(100vh-250px)] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1 lg:max-h-[calc(100vh-280px)]">
           {products.map((product) => {
             const active = selectedProduct?.id === product.id;
             return (
