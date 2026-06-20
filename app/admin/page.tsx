@@ -15,7 +15,6 @@ import { AdminProductManager } from "@/components/admin-product-manager";
 import { AdminSiteSettings } from "@/components/admin-site-settings";
 import { Button } from "@/components/ui/button";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { expirePendingOrders } from "@/lib/orders";
 import { listCategories, listProducts } from "@/lib/products";
 import { getSiteSettings } from "@/lib/site-settings";
 
@@ -52,8 +51,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     TABS.some((t) => t.key === searchParams?.tab)
       ? (searchParams!.tab as Tab)
       : "products";
-
-  await expirePendingOrders();
 
   const [categories, products, siteSettings] = await Promise.all([
     listCategories(true),

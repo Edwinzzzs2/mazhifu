@@ -182,6 +182,7 @@ export async function expirePendingOrders(limit = 200) {
         SELECT out_trade_no
         FROM orders
         WHERE status = 'pending'
+          AND paid_at IS NULL
           AND expires_at IS NOT NULL
           AND expires_at <= NOW()
         ORDER BY expires_at ASC
@@ -194,6 +195,7 @@ export async function expirePendingOrders(limit = 200) {
         FROM due
         WHERE orders.out_trade_no = due.out_trade_no
           AND orders.status = 'pending'
+          AND orders.paid_at IS NULL
         RETURNING orders.out_trade_no
       ),
       released AS (
@@ -313,8 +315,6 @@ export async function listOrdersByQueryAuth(
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !queryPassword) return [];
 
-  await expirePendingOrders();
-
   const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
 
   const result = await getPool().query<OrderRecord>(
@@ -342,6 +342,7 @@ async function expireOrderIfNeeded(outTradeNo: string) {
         SET status = 'expired'
         WHERE out_trade_no = $1
           AND status = 'pending'
+          AND paid_at IS NULL
           AND expires_at <= NOW()
         RETURNING out_trade_no
       )
@@ -613,7 +614,6 @@ export async function listOrdersForAdmin(
   q = "",
 ): Promise<AdminOrderListResult> {
   await ensureStoreSchema();
-  await expirePendingOrders();
 
   const pageSize = 20;
   const offset = (Math.max(1, page) - 1) * pageSize;

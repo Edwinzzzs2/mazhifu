@@ -94,6 +94,9 @@ async function initializeStoreSchema() {
       WHERE trade_no IS NOT NULL;
     CREATE INDEX IF NOT EXISTS orders_status_created_at_idx
       ON orders (status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS orders_pending_expires_at_idx
+      ON orders (expires_at)
+      WHERE status = 'pending' AND paid_at IS NULL;
     CREATE INDEX IF NOT EXISTS products_category_active_idx
       ON products (category_id, active);
     CREATE UNIQUE INDEX IF NOT EXISTS card_secrets_product_hash_unique
