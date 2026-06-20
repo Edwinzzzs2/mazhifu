@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { markOrderFromPayment, markOrderFromQuery, retryOrderFulfillment } from "@/lib/orders";
+import { markOrderFromPayment, markOrderFromQuery } from "@/lib/orders";
 import {
   MAPAY_QUERY_TIMEOUT_MS,
   isAbortError,
@@ -7,6 +7,28 @@ import {
   queryMapayOrder,
   verifyMapayPayload,
 } from "@/lib/mapay";
+
+/** 支付确认后，将发货任务投入 BullMQ 队列异步处理 */
+async function enqueueFulfill(outTradeNo: string) {
+  try {
+    const { orderFulfillQueue } = await import("@/lib/queue");
+    await orderFulfillQueue.add(
+      "fulfill",
+      { out_trade_no: outTradeNo },
+      { jobId: `fulfill:${outTradeNo}` }, // 防止重复投递
+    );
+    console.log(`[notify] 发货任务已入队: ${outTradeNo}`);
+  } catch (err) {
+    console.error("[notify] 发货任务入队失败，尝试同步发货兜底", err);
+    // 队列不可用时同步发货兜底
+    const { retryOrderFulfillment } = await import("@/lib/orders");
+    try {
+      await retryOrderFulfillment(outTradeNo);
+    } catch (fulfillErr) {
+      console.error("[notify] 同步发货兜底也失败", fulfillErr);
+    }
+  }
+}
 
 async function handleNotify(request: Request) {
   const payload = await parseMapayPayload(request);
@@ -71,11 +93,7 @@ async function handleNotify(request: Request) {
       });
       const updated = await markOrderFromPayment(payload);
       if (updated) {
-        try {
-          await retryOrderFulfillment(outTradeNo);
-        } catch (err) {
-          console.error("Fulfillment after notify (query-error fallback) failed", err);
-        }
+        await enqueueFulfill(outTradeNo);
       }
       return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
     }
@@ -91,24 +109,16 @@ async function handleNotify(request: Request) {
     } else {
       console.error("[notify] 主动回查网络异常，fallback 信任 webhook", err);
     }
-    // 回查超时/网络故障：结果不确定，退回信任 webhook（不能因为网络问题让用户付了钱不认账）
+    // 回查超时/网络故障：结果不确定，退回信任 webhook
     const updated = await markOrderFromPayment(payload);
     if (updated) {
-      try {
-        await retryOrderFulfillment(outTradeNo);
-      } catch (fulfillErr) {
-        console.error("Fulfillment after notify (timeout fallback) failed", fulfillErr);
-      }
+      await enqueueFulfill(outTradeNo);
     }
     return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
   }
 
-  // ④ 确认支付成功后立即触发发货
-  try {
-    await retryOrderFulfillment(outTradeNo);
-  } catch (err) {
-    console.error("Fulfillment after notify failed", err);
-  }
+  // ④ 回查确认支付成功，异步入队发货
+  await enqueueFulfill(outTradeNo);
 
   return new NextResponse("success", { status: 200 });
 }

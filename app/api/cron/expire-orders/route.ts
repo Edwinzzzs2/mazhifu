@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { expirePendingOrders } from "@/lib/orders";
+import { expirePendingOrders } from "@/lib/order-expiration";
 
 export const dynamic = "force-dynamic";
 

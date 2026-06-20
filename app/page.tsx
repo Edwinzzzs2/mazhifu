@@ -1,6 +1,6 @@
 import { Storefront } from "@/components/storefront";
 import { cookies } from "next/headers";
-import { expirePendingOrders } from "@/lib/orders";
+import { expirePendingOrders } from "@/lib/order-expiration";
 import { listCategories, listProducts } from "@/lib/products";
 
 const HOME_EXPIRE_CHECK_COOKIE = "mazhifu_home_expire_checked";

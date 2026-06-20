@@ -4,6 +4,7 @@ import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
 import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
 import type { ProductRecord } from "@/lib/products";
+import { expireOrderIfNeeded } from "@/lib/order-expiration";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
 export type OrderStatus = "pending" | "paid" | "expired" | "cancelled";
@@ -153,7 +154,27 @@ export async function createOrder(
     }
 
     await client.query("COMMIT");
-    return { order: result.rows[0], access_token: accessToken };
+
+    const createdOrder = result.rows[0];
+
+    // 下单成功后，立即往队列投一个延迟过期任务（到期自动取消 + 释放卡密）
+    try {
+      const { orderExpireQueue } = await import("@/lib/queue");
+      const delayMs = expiresMinutes * 60 * 1000;
+      await orderExpireQueue.add(
+        "expire",
+        { out_trade_no: outTradeNo },
+        {
+          delay: delayMs,
+          jobId: `expire:${outTradeNo}`, // 防止重复投递
+        },
+      );
+    } catch (queueErr) {
+      // 队列投递失败不影响下单，依靠懒过期兜底
+      console.error("[queue] 投递过期任务失败，将依赖懒过期兜底", queueErr);
+    }
+
+    return { order: createdOrder, access_token: accessToken };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -170,51 +191,6 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
     [outTradeNo],
   );
   return result.rows[0] ?? null;
-}
-
-export async function expirePendingOrders(limit = 200) {
-  await ensureStoreSchema();
-
-  const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
-  const result = await getPool().query<{ expired_count: string }>(
-    `
-      WITH due AS (
-        SELECT out_trade_no
-        FROM orders
-        WHERE status = 'pending'
-          AND paid_at IS NULL
-          AND expires_at IS NOT NULL
-          AND expires_at <= NOW()
-        ORDER BY expires_at ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT $1
-      ),
-      expired AS (
-        UPDATE orders
-        SET status = 'expired'
-        FROM due
-        WHERE orders.out_trade_no = due.out_trade_no
-          AND orders.status = 'pending'
-          AND orders.paid_at IS NULL
-        RETURNING orders.out_trade_no
-      ),
-      released AS (
-        UPDATE card_secrets
-        SET status = 'available',
-            order_no = NULL,
-            reserved_at = NULL,
-            updated_at = NOW()
-        FROM expired
-        WHERE card_secrets.order_no = expired.out_trade_no
-          AND card_secrets.status = 'reserved'
-        RETURNING card_secrets.id
-      )
-      SELECT COUNT(*)::text AS expired_count FROM expired
-    `,
-    [safeLimit],
-  );
-
-  return Number(result.rows[0]?.expired_count ?? 0);
 }
 
 export async function getOrderWithAccess(outTradeNo: string, accessToken: string) {
@@ -332,31 +308,6 @@ export async function listOrdersByQueryAuth(
     views.push({ ...order, delivery_content: deliveryContent } satisfies OrderView);
   }
   return views;
-}
-
-async function expireOrderIfNeeded(outTradeNo: string) {
-  await getPool().query(
-    `
-      WITH expired AS (
-        UPDATE orders
-        SET status = 'expired'
-        WHERE out_trade_no = $1
-          AND status = 'pending'
-          AND paid_at IS NULL
-          AND expires_at <= NOW()
-        RETURNING out_trade_no
-      )
-      UPDATE card_secrets
-      SET status = 'available',
-          order_no = NULL,
-          reserved_at = NULL,
-          updated_at = NOW()
-      FROM expired
-      WHERE card_secrets.order_no = expired.out_trade_no
-        AND card_secrets.status = 'reserved'
-    `,
-    [outTradeNo],
-  );
 }
 
 async function assignCardSecretsForOrder(client: PoolClient, order: OrderRecord) {
