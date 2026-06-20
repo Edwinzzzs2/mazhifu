@@ -172,6 +172,49 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
   return result.rows[0] ?? null;
 }
 
+export async function expirePendingOrders(limit = 200) {
+  await ensureStoreSchema();
+
+  const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
+  const result = await getPool().query<{ expired_count: string }>(
+    `
+      WITH due AS (
+        SELECT out_trade_no
+        FROM orders
+        WHERE status = 'pending'
+          AND expires_at IS NOT NULL
+          AND expires_at <= NOW()
+        ORDER BY expires_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT $1
+      ),
+      expired AS (
+        UPDATE orders
+        SET status = 'expired'
+        FROM due
+        WHERE orders.out_trade_no = due.out_trade_no
+          AND orders.status = 'pending'
+        RETURNING orders.out_trade_no
+      ),
+      released AS (
+        UPDATE card_secrets
+        SET status = 'available',
+            order_no = NULL,
+            reserved_at = NULL,
+            updated_at = NOW()
+        FROM expired
+        WHERE card_secrets.order_no = expired.out_trade_no
+          AND card_secrets.status = 'reserved'
+        RETURNING card_secrets.id
+      )
+      SELECT COUNT(*)::text AS expired_count FROM expired
+    `,
+    [safeLimit],
+  );
+
+  return Number(result.rows[0]?.expired_count ?? 0);
+}
+
 export async function getOrderWithAccess(outTradeNo: string, accessToken: string) {
   const order = await getOrderByOutTradeNo(outTradeNo);
   return order && tokenMatches(order.status_token_hash, accessToken) ? order : null;
@@ -205,10 +248,16 @@ export async function getOrderViewByEmail(outTradeNo: string, email: string) {
   if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
 
   await expireOrderIfNeeded(outTradeNo);
+  const refreshed = await getPool().query<OrderRecord>(
+    "SELECT * FROM orders WHERE out_trade_no = $1",
+    [outTradeNo],
+  );
+  const refreshedOrder = refreshed.rows[0] ?? order;
 
-  const deliveryContent = order.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
+  const deliveryContent =
+    refreshedOrder.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
   return {
-    ...order,
+    ...refreshedOrder,
     delivery_content: deliveryContent,
   } satisfies OrderView;
 }
@@ -263,6 +312,8 @@ export async function listOrdersByQueryAuth(
 ): Promise<OrderView[]> {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !queryPassword) return [];
+
+  await expirePendingOrders();
 
   const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
 
@@ -562,6 +613,7 @@ export async function listOrdersForAdmin(
   q = "",
 ): Promise<AdminOrderListResult> {
   await ensureStoreSchema();
+  await expirePendingOrders();
 
   const pageSize = 20;
   const offset = (Math.max(1, page) - 1) * pageSize;
@@ -609,6 +661,7 @@ export type AdminOrderDetail = OrderRecord & {
 
 export async function getOrderDetailForAdmin(outTradeNo: string): Promise<AdminOrderDetail | null> {
   await ensureStoreSchema();
+  await expireOrderIfNeeded(outTradeNo);
 
   const result = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { expirePendingOrders } from "@/lib/orders";
 import { parseProductInput } from "@/lib/product-input";
 import { createProduct, listCategories, listProducts } from "@/lib/products";
 
@@ -15,6 +16,8 @@ export async function GET() {
   if (!adminAllowed()) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
+
+  await expirePendingOrders();
 
   const [products, categories] = await Promise.all([
     listProducts(true),

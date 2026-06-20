@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
-import { createOrder } from "@/lib/orders";
+import { createOrder, expirePendingOrders } from "@/lib/orders";
 import { getProductById } from "@/lib/products";
 import { getRequestOrigin } from "@/lib/request-utils";
 
@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     const quantity = Number(formData.get("quantity") ?? 1);
     const contact = String(formData.get("contact") ?? "");
     const queryPassword = String(formData.get("query_password") ?? "");
+    await expirePendingOrders();
     const product = await getProductById(productId);
 
     if (

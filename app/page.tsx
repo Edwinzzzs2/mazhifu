@@ -1,4 +1,5 @@
 import { Storefront } from "@/components/storefront";
+import { expirePendingOrders } from "@/lib/orders";
 import { listCategories, listProducts } from "@/lib/products";
 
 type HomePageProps = {
@@ -10,6 +11,8 @@ type HomePageProps = {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage({ searchParams }: HomePageProps) {
+  await expirePendingOrders();
+
   const [categories, products] = await Promise.all([
     listCategories(),
     listProducts(),
