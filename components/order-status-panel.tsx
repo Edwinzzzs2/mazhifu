@@ -75,7 +75,7 @@ export function OrderStatusPanel({
   const statusLabel = delivered
     ? "支付成功，已发货"
     : waitingDelivery
-      ? "支付成功，等待发货"
+      ? "支付成功，未发货"
       : expired
         ? "订单已过期"
         : "等待支付中";

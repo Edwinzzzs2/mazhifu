@@ -20,7 +20,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 };
 
 const FULFILLMENT_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "待发货", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  pending: { label: "未发货", className: "border-amber-200 bg-amber-50 text-amber-700" },
   delivered: { label: "已发货", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
   failed: { label: "发货失败", className: "border-red-200 bg-red-50 text-red-700" },
 };
@@ -121,7 +121,7 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
         </div>
         {detail.delivery_secrets.length === 0 ? (
           <div className="text-xs text-slate-400">
-            {detail.fulfillment_status === "delivered" ? "卡密为空" : "尚未发货"}
+            {detail.fulfillment_status === "delivered" ? "卡密为空" : "未发货"}
           </div>
         ) : (
           <ul className="space-y-1.5">

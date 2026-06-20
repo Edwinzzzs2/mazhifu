@@ -47,7 +47,7 @@ function StatusBadge({ status, fulfillment }: { status: string; fulfillment: str
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
         <Clock3 className="h-3 w-3" />
-        等待发货
+        未发货
       </span>
     );
   }
@@ -177,7 +177,7 @@ function OrderRow({ order }: { order: OrderSummary }) {
               ) : delivered ? (
                 <div className="text-sm text-slate-400">暂无卡密记录</div>
               ) : order.status === "paid" ? (
-                <div className="text-sm text-slate-400">已支付，等待发货中…</div>
+                <div className="text-sm text-slate-400">已支付，未发货</div>
               ) : (
                 <div className="text-sm text-slate-400">
                   {order.status === "pending" ? "等待支付" : "订单已过期，无卡密"}
