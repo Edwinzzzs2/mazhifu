@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { MAPAY_QUERY_TIMEOUT_MS, isAbortError, queryMapayOrder } from "@/lib/mapay";
 import {
   getOrderViewByQueryAuth,
   getOrderViewInternal,
   getOrderViewWithAccess,
-  markOrderFromQuery,
-  recordOrderQuery,
   retryOrderFulfillment,
 } from "@/lib/orders";
 
@@ -33,6 +30,15 @@ function formatOrderResponse(order: NonNullable<Awaited<ReturnType<typeof getOrd
   };
 }
 
+/**
+ * 订单状态查询接口 — 纯读取 DB 状态。
+ *
+ * 状态变更由以下两个机制驱动：
+ * 1. 码支付回调 /api/pay/notify（主路径）
+ * 2. Redis worker 定时对账（兜底）
+ *
+ * 本接口不主动调用码支付 API，避免不必要的外部请求。
+ */
 export async function GET(request: Request, { params }: StatusRouteContext) {
   const url = new URL(request.url);
   const accessToken = url.searchParams.get("token") ?? "";
@@ -49,59 +55,13 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
   }
 
-  // 非 pending 状态不需要回查码支付
-  if (order.status !== "pending") {
-    // 已支付但未发货时尝试发货
-    if (order.status === "paid" && order.fulfillment_status !== "delivered") {
-      try {
-        await retryOrderFulfillment(order.out_trade_no);
-        order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
-      } catch (error) {
-        console.error("Order fulfillment retry failed", error);
-      }
-    }
-    return NextResponse.json(formatOrderResponse(order));
-  }
-
-  // pending 状态 — 先检查冷却时间，避免频繁请求码支付
-  const lastCheckedAt = order.query_checked_at ? new Date(order.query_checked_at).getTime() : 0;
-  const canReconcile = Date.now() - lastCheckedAt >= 5_000;
-
-  if (!canReconcile) {
-    // 冷却期内直接返回当前状态，不调码支付
-    return NextResponse.json(formatOrderResponse(order));
-  }
-
-  // 异步回查码支付，超时由 queryMapayOrder 控制，避免整个请求卡太久。
-  try {
-    const result = await queryMapayOrder(order.out_trade_no);
-
-    await recordOrderQuery(order.out_trade_no, result);
-
-    if (
-      result.out_trade_no === order.out_trade_no &&
-      String(result.pid) === String(process.env.MAPAY_PID) &&
-      Number(result.status) === 1
-    ) {
-      await markOrderFromQuery(result);
-      // 标记支付后立即尝试发货
-      try {
-        await retryOrderFulfillment(order.out_trade_no);
-      } catch (err) {
-        console.error("Fulfillment after reconciliation failed", err);
-      }
-    }
-
-    order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
-  } catch (error) {
-    // 码支付查询失败/超时 — 不影响返回，先返回数据库中的当前状态
-    if (isAbortError(error)) {
-      console.warn("Mapay reconciliation timed out; returning cached order status", {
-        out_trade_no: order.out_trade_no,
-        timeout_ms: MAPAY_QUERY_TIMEOUT_MS,
-      });
-    } else {
-      console.error("Mapay reconciliation failed (returning cached status)", error);
+  // 已支付但未发货时尝试发货
+  if (order.status === "paid" && order.fulfillment_status !== "delivered") {
+    try {
+      await retryOrderFulfillment(order.out_trade_no);
+      order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
+    } catch (error) {
+      console.error("Order fulfillment retry failed", error);
     }
   }
 
