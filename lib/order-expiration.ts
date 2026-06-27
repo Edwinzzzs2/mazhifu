@@ -1,5 +1,56 @@
 ﻿import { getPool } from "@/lib/db";
 import { ensureStoreSchema } from "@/lib/store-schema";
+import { isAbortError, queryMapayOrder } from "@/lib/mapay";
+import { markOrderFromQuery, recordOrderQuery, retryOrderFulfillment } from "@/lib/orders";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("expire:reconcile");
+
+async function reconcileMapayBeforeExpire(outTradeNo: string) {
+  try {
+    logger.info("query mapay before expiring", {
+      out_trade_no: outTradeNo,
+    });
+
+    const queryResult = await queryMapayOrder(outTradeNo);
+    const markedPaid = await markOrderFromQuery(queryResult);
+
+    logger.info("mapay query handled", {
+      out_trade_no: outTradeNo,
+      marked_paid: markedPaid,
+      trade_no: queryResult.trade_no || null,
+      status: queryResult.status ?? null,
+      code: queryResult.code ?? null,
+      result: queryResult,
+    });
+
+    if (markedPaid) {
+      await retryOrderFulfillment(outTradeNo);
+      logger.info("paid order refreshed fulfillment", {
+        out_trade_no: outTradeNo,
+        trade_no: queryResult.trade_no || null,
+      });
+      return "paid" as const;
+    }
+
+    await recordOrderQuery(outTradeNo, queryResult);
+    logger.info("query response recorded", {
+      out_trade_no: outTradeNo,
+      trade_no: queryResult.trade_no || null,
+    });
+    return "checked" as const;
+  } catch (error) {
+    if (isAbortError(error)) {
+      logger.warn("mapay query timeout", { out_trade_no: outTradeNo });
+    } else {
+      logger.error("mapay query failed", {
+        out_trade_no: outTradeNo,
+        error,
+      });
+    }
+    throw error;
+  }
+}
 
 /**
  * 过期单个订单（BullMQ worker 调用）。
@@ -7,6 +58,30 @@ import { ensureStoreSchema } from "@/lib/store-schema";
  */
 export async function expireSingleOrder(outTradeNo: string): Promise<boolean> {
   await ensureStoreSchema();
+
+  const dueResult = await getPool().query<{ out_trade_no: string }>(
+    `
+      SELECT out_trade_no
+      FROM orders
+      WHERE out_trade_no = $1
+        AND status = 'pending'
+        AND paid_at IS NULL
+        AND expires_at IS NOT NULL
+        AND expires_at <= NOW()
+      LIMIT 1
+    `,
+    [outTradeNo],
+  );
+
+  if (!dueResult.rowCount) {
+    return false;
+  }
+
+  const reconcileResult = await reconcileMapayBeforeExpire(outTradeNo);
+  if (reconcileResult === "paid") {
+    return false;
+  }
+
   const result = await getPool().query<{ expired_count: string }>(
     `
       WITH due AS (

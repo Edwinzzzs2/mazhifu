@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { createLogger } from "@/lib/logger";
 import type { OrderRecord } from "@/lib/orders";
 
 export type MapayPayload = Record<string, string>;
@@ -19,6 +20,7 @@ export type MapayQueryResult = {
 };
 
 export const MAPAY_QUERY_TIMEOUT_MS = 8000;
+const logger = createLogger("mapay");
 
 export type MapayRequestSnapshot = {
   method: string;
@@ -62,6 +64,15 @@ function redactMapayQueryUrl(url: URL) {
     safeUrl.searchParams.set("key", "[redacted]");
   }
   return safeUrl.toString();
+}
+
+function summarizeMapayPayload(params: MapayPayload) {
+  return Object.fromEntries(
+    Object.entries(params).map(([field, value]) => [
+      field,
+      field === "sign" ? "[redacted]" : value,
+    ]),
+  );
 }
 
 export async function readMapayRequestSnapshot(request: Request): Promise<MapayRequestSnapshot> {
@@ -143,7 +154,7 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
 
   const mapiUrl = process.env.MAPAY_MAPI_URL || "https://mzf.mapay.cc/xpay/epay/mapi.php";
 
-  console.log("[mapay:mapi] request", {
+  logger.info("mapi request", {
     out_trade_no: order.out_trade_no,
     url: mapiUrl,
     pay_type,
@@ -160,7 +171,7 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
   }).finally(() => clearTimeout(timeout));
 
   const responseText = await response.text();
-  console.log("[mapay:mapi] response", {
+  logger.info("mapi response", {
     out_trade_no: order.out_trade_no,
     status: response.status,
     raw_body: responseText,
@@ -170,7 +181,23 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
     throw new Error(`MAPI request failed with HTTP ${response.status}: ${responseText}`);
   }
 
-  const result = JSON.parse(responseText) as MapayCreateResult;
+  let result: MapayCreateResult;
+  try {
+    result = JSON.parse(responseText) as MapayCreateResult;
+  } catch (error) {
+    logger.error("mapi parse failed", {
+      out_trade_no: order.out_trade_no,
+      raw_body: responseText,
+      error,
+    });
+    throw error;
+  }
+
+  logger.info("mapi parsed", {
+    out_trade_no: order.out_trade_no,
+    result,
+  });
+
   if (Number(result.code) !== 1) {
     throw new Error(`MAPI error: ${result.msg || "unknown"}`);
   }
@@ -220,6 +247,14 @@ export function buildMapaySubmitUrl({
     paymentUrl.searchParams.set(field, value);
   });
 
+  logger.info("submit generated", {
+    out_trade_no: order.out_trade_no,
+    pay_type,
+    gateway: paymentUrl.origin + paymentUrl.pathname,
+    params: summarizeMapayPayload(signedParams),
+    url: paymentUrl.toString(),
+  });
+
   return paymentUrl.toString();
 }
 
@@ -235,7 +270,7 @@ export async function queryMapayOrder(outTradeNo: string) {
   queryUrl.searchParams.set("key", key);
   queryUrl.searchParams.set("out_trade_no", outTradeNo);
 
-  console.log("[mapay:query] request", {
+  logger.info("query request", {
     out_trade_no: outTradeNo,
     url: redactMapayQueryUrl(queryUrl),
     timeout_ms: MAPAY_QUERY_TIMEOUT_MS,
@@ -250,7 +285,7 @@ export async function queryMapayOrder(outTradeNo: string) {
   }).finally(() => clearTimeout(timeout));
   const responseText = await response.text();
 
-  console.log("[mapay:query] response", {
+  logger.info("query response", {
     out_trade_no: outTradeNo,
     status: response.status,
     status_text: response.statusText,
@@ -262,8 +297,19 @@ export async function queryMapayOrder(outTradeNo: string) {
     throw new Error(`Mapay query failed with HTTP ${response.status}: ${responseText}`);
   }
 
-  const result = JSON.parse(responseText) as MapayQueryResult;
-  console.log("[mapay:query] parsed", {
+  let result: MapayQueryResult;
+  try {
+    result = JSON.parse(responseText) as MapayQueryResult;
+  } catch (error) {
+    logger.error("query parse failed", {
+      out_trade_no: outTradeNo,
+      raw_body: responseText,
+      error,
+    });
+    throw error;
+  }
+
+  logger.info("query parsed", {
     out_trade_no: outTradeNo,
     result,
   });

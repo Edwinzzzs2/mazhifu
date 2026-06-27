@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { parseMapayPayload, readMapayRequestSnapshot } from "@/lib/mapay";
 import { getRequestOrigin } from "@/lib/request-utils";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("mapay:return");
 
 export async function GET(request: Request) {
   const requestSnapshot = await readMapayRequestSnapshot(request);
   const payload = await parseMapayPayload(request);
-  console.log("[mapay:return] callback received", {
+  logger.info("callback received", {
     ...requestSnapshot,
     payload,
   });
@@ -24,6 +27,13 @@ export async function GET(request: Request) {
   }
 
   // 同步跳转可能被用户伪造，订单状态只由异步验签通知或服务端主动查询更新。
+  logger.info("response", {
+    status: 303,
+    out_trade_no: outTradeNo || null,
+    redirect_url: redirectUrl.toString(),
+    payload,
+  });
+
   return NextResponse.redirect(redirectUrl, { status: 303 });
 }
 

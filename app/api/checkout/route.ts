@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { createMapayPayment, buildMapaySubmitUrl } from "@/lib/mapay";
-import { createOrder, updateOrderTradeNo } from "@/lib/orders";
+import { buildMapaySubmitUrl } from "@/lib/mapay";
+import { createOrder } from "@/lib/orders";
 import { getProductById } from "@/lib/products";
 import { getRequestOrigin } from "@/lib/request-utils";
+import { createLogger } from "@/lib/logger";
 
 const PAY_TYPES = new Set(["alipay", "wxpay"]);
+const logger = createLogger("checkout");
 
 export async function POST(request: Request) {
   try {
@@ -37,41 +39,31 @@ export async function POST(request: Request) {
       access_token: accessToken,
     };
 
-    let payUrl = "";
-    let tradeNo: string | null = null;
-
-    // 优先使用 MAPI 接口（后端调用，可获取 trade_no）
+    // 前台用户支付走 Submit 网关页，避免直接打开 MAPI 返回的 qrcode/urlscheme/第三方渲染页。
+    let payUrl: string;
     try {
-      const mapiResult = await createMapayPayment(payOptions);
-      tradeNo = mapiResult.trade_no || null;
-      payUrl = mapiResult.payurl || mapiResult.qrcode || mapiResult.urlscheme || "";
-
-      // 把 trade_no 存入订单
-      if (tradeNo) {
-        await updateOrderTradeNo(created.order.out_trade_no, tradeNo);
-      }
-    } catch (mapiErr) {
-      console.warn("[checkout] MAPI 调用失败，降级到 Submit 跳转", mapiErr);
+      payUrl = buildMapaySubmitUrl(payOptions);
+    } catch (error) {
+      logger.warn("build mapay submit url failed; fallback to local pay page", {
+        out_trade_no: created.order.out_trade_no,
+        error,
+      });
+      payUrl = `${origin}/pay/${encodeURIComponent(created.order.out_trade_no)}?token=${encodeURIComponent(accessToken)}`;
     }
 
-    // MAPI 没拿到 payUrl，降级用 Submit 拼 URL
-    if (!payUrl) {
-      try {
-        payUrl = buildMapaySubmitUrl(payOptions);
-      } catch {
-        payUrl = `${origin}/pay/${encodeURIComponent(created.order.out_trade_no)}?token=${encodeURIComponent(accessToken)}`;
-      }
-    }
-
-    return NextResponse.json({
+    const responsePayload = {
       pay_url: payUrl,
       pay_type: payType,
       out_trade_no: created.order.out_trade_no,
       access_token: accessToken,
-      trade_no: tradeNo,
-    });
+      trade_no: null,
+    };
+
+    logger.info("response", responsePayload);
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
-    console.error("checkout failed", error);
+    logger.error("failed", { error });
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "下单失败，请稍后重试" },
       { status: 500 },

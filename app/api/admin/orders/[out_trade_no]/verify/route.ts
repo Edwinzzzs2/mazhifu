@@ -3,10 +3,13 @@ import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { getPool } from "@/lib/db";
 import { ensureStoreSchema } from "@/lib/store-schema";
 import { queryMapayOrder, isAbortError } from "@/lib/mapay";
-import { markOrderFromQuery } from "@/lib/orders";
+import { markOrderFromQuery, recordOrderQuery } from "@/lib/orders";
 import { retryOrderFulfillment } from "@/lib/orders";
 import { expireSingleOrder } from "@/lib/order-expiration";
+import { createLogger } from "@/lib/logger";
 import type { OrderRecord } from "@/lib/orders";
+
+const logger = createLogger("admin:verify");
 
 function adminAllowed() {
   try {
@@ -47,20 +50,18 @@ export async function POST(
     queryResult = await queryMapayOrder(out_trade_no);
   } catch (err) {
     const message = isAbortError(err) ? "码支付查询超时" : "码支付查询失败";
-    console.error("[admin:verify]", message, err);
+    logger.error(message, { error: err });
     return NextResponse.json({ message, error: String(err) }, { status: 502 });
   }
 
-  // 3. 保存查询响应和平台流水号（无论什么状态都更新）
+  // 3. 保存查询响应，并在本地订单还没有平台流水号时补绑定。
   const tradeNo = queryResult.trade_no || null;
-  await getPool().query(
-    `UPDATE orders
-     SET query_response = $2::jsonb,
-         query_checked_at = NOW(),
-         trade_no = COALESCE(trade_no, $3)
-     WHERE out_trade_no = $1`,
-    [out_trade_no, JSON.stringify(queryResult), tradeNo],
-  );
+  await recordOrderQuery(out_trade_no, queryResult);
+  logger.info("mapay query result recorded", {
+    out_trade_no,
+    trade_no: tradeNo,
+    query_result: queryResult,
+  });
 
   // 4. 判断支付状态
   const isPaid = Number(queryResult.code) === 1 && Number(queryResult.status) === 1;
@@ -80,7 +81,7 @@ export async function POST(
     try {
       await retryOrderFulfillment(out_trade_no);
     } catch (err) {
-      console.error("[admin:verify] fulfill failed", err);
+      logger.error("fulfill failed", { error: err });
     }
     action = "marked_paid";
     newStatus = "paid";
@@ -100,11 +101,15 @@ export async function POST(
     [out_trade_no],
   );
 
-  return NextResponse.json({
+  const responsePayload = {
     action,
     new_status: newStatus,
     trade_no: tradeNo,
     query_result: queryResult,
     order: updatedResult.rows[0],
-  });
+  };
+
+  logger.info("response", responsePayload);
+
+  return NextResponse.json(responsePayload);
 }

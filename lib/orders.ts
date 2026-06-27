@@ -2,9 +2,15 @@ import crypto from "crypto";
 import type { PoolClient } from "pg";
 import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
+import { createLogger } from "@/lib/logger";
 import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
 import type { ProductRecord } from "@/lib/products";
 import { ensureStoreSchema } from "@/lib/store-schema";
+
+const queueLogger = createLogger("queue");
+const fallbackExpireLogger = createLogger("fallback:expire");
+const paymentLogger = createLogger("orders:payment");
+const queryLogger = createLogger("orders:query");
 
 export type OrderStatus = "pending" | "paid" | "expired" | "cancelled";
 export type FulfillmentStatus = "pending" | "delivered" | "failed";
@@ -170,14 +176,23 @@ export async function createOrder(
       );
     } catch (queueErr) {
       // 队列不可用时，用进程内 setTimeout 做本地兜底（进程重启会丢失，但至少覆盖大部分场景）
-      console.error("[queue] 投递过期任务失败，启用本地 setTimeout 兜底", queueErr);
+      queueLogger.error("expire job enqueue failed; enabling local setTimeout fallback", {
+        out_trade_no: outTradeNo,
+        error: queueErr,
+      });
       setTimeout(async () => {
         try {
           const { expireSingleOrder } = await import("@/lib/order-expiration");
           const expired = await expireSingleOrder(outTradeNo);
-          console.log(`[fallback:expire] ${outTradeNo} → ${expired ? "已过期" : "跳过"}`);
+          fallbackExpireLogger.info("expire fallback completed", {
+            out_trade_no: outTradeNo,
+            expired,
+          });
         } catch (err) {
-          console.error(`[fallback:expire] ${outTradeNo} 兜底过期失败`, err);
+          fallbackExpireLogger.error("expire fallback failed", {
+            out_trade_no: outTradeNo,
+            error: err,
+          });
         }
       }, delayMs);
     }
@@ -452,7 +467,7 @@ async function markOrderPaid(
 
     // 订单号和金额必须同时匹配，避免拿真实小额回调去撞大额订单。
     if (!order || Number(order.money).toFixed(2) !== Number(paidMoney).toFixed(2)) {
-      console.warn("[orders:payment] rejected payment update", {
+      paymentLogger.warn("rejected payment update", {
         out_trade_no: outTradeNo,
         source,
         paid_money: paidMoney,
@@ -472,7 +487,7 @@ async function markOrderPaid(
         [tradeNo, outTradeNo],
       );
       if (duplicate.rowCount) {
-        console.warn("[orders:payment] rejected duplicate trade_no", {
+        paymentLogger.warn("rejected duplicate trade_no", {
           out_trade_no: outTradeNo,
           source,
           trade_no: tradeNo,
@@ -511,7 +526,7 @@ async function markOrderPaid(
         `,
         [order.product_id, order.quantity],
       );
-      console.log("[orders:payment] marked order paid", {
+      paymentLogger.info("marked order paid", {
         out_trade_no: outTradeNo,
         source,
         trade_no: tradeNo,
@@ -530,7 +545,7 @@ async function markOrderPaid(
         `,
         [outTradeNo, JSON.stringify(rawPayload)],
       );
-      console.log("[orders:payment] refreshed paid order query payload", {
+      paymentLogger.info("refreshed paid order query payload", {
         out_trade_no: outTradeNo,
         source,
         trade_no: tradeNo,
@@ -539,7 +554,7 @@ async function markOrderPaid(
         raw_payload: rawPayload,
       });
     } else {
-      console.log("[orders:payment] duplicate paid callback accepted", {
+      paymentLogger.info("duplicate paid callback accepted", {
         out_trade_no: outTradeNo,
         source,
         trade_no: tradeNo,
@@ -565,7 +580,7 @@ export async function markOrderFromPayment(payload: MapayPayload) {
     !payload.out_trade_no ||
     !payload.money
   ) {
-    console.warn("[orders:payment] ignored notify payload", {
+    paymentLogger.warn("ignored notify payload", {
       reason: "invalid notify status or missing fields",
       payload,
     });
@@ -588,7 +603,7 @@ export async function markOrderFromQuery(result: MapayQueryResult) {
     !result.out_trade_no ||
     !result.money
   ) {
-    console.warn("[orders:payment] ignored query result", {
+    paymentLogger.warn("ignored query result", {
       reason: "invalid query status or missing fields",
       result,
     });
@@ -606,14 +621,35 @@ export async function markOrderFromQuery(result: MapayQueryResult) {
 
 export async function recordOrderQuery(outTradeNo: string, result: MapayQueryResult) {
   await ensureStoreSchema();
-  await getPool().query(
+  const tradeNo = result.trade_no || null;
+  const updateResult = await getPool().query(
     `
       UPDATE orders
-      SET query_response = $2::jsonb, query_checked_at = NOW()
+      SET query_response = $2::jsonb,
+          query_checked_at = NOW(),
+          trade_no = CASE
+            WHEN trade_no IS NULL
+              AND $3::text IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM orders AS duplicate
+                WHERE duplicate.trade_no = $3::text
+                  AND duplicate.out_trade_no <> $1
+              )
+            THEN $3::text
+            ELSE trade_no
+          END
       WHERE out_trade_no = $1
     `,
-    [outTradeNo, JSON.stringify(result)],
+    [outTradeNo, JSON.stringify(result), tradeNo],
   );
+
+  queryLogger.info("recorded mapay query response", {
+    out_trade_no: outTradeNo,
+    trade_no: tradeNo,
+    row_count: updateResult.rowCount,
+    result,
+  });
 }
 
 export type AdminOrderListItem = OrderRecord;
