@@ -40,8 +40,9 @@ body {
   min-height: 100vh;
   color: hsl(var(--foreground));
   background:
-    linear-gradient(180deg, hsl(198 100% 97%) 0%, hsl(202 92% 95%) 100%);
+    linear-gradient(180deg, hsl(204 45% 98%) 0%, hsl(210 32% 96%) 100%);
   font-family: var(--font-sans);
+  overflow-x: hidden;
   /* 防止 iOS Safari 双击缩放 */
   touch-action: manipulation;
 }
@@ -105,26 +106,26 @@ textarea {
 
   .product-card {
     overflow: hidden;
-    min-height: 320px;
-    border: 1px solid rgb(186 230 253);
+    min-height: 0;
+    border: 1px solid rgb(226 232 240);
     border-radius: 8px;
     background: white;
-    box-shadow: 0 12px 30px rgba(14, 116, 144, 0.08);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
     transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
   }
 
   .product-card:hover {
     transform: translateY(-3px);
     border-color: rgb(14 165 233);
-    box-shadow: 0 20px 42px rgba(14, 116, 144, 0.14);
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1);
   }
 
   .form-control,
   .admin-input {
     width: 100%;
-    border: 1px solid rgb(186 230 253);
+    border: 1px solid rgb(203 213 225);
     border-radius: 8px;
-    background: rgb(240 249 255);
+    background: rgb(248 250 252);
     /* iOS 16px+ 防止 focus 时自动缩放 */
     font-size: 16px;
     padding: 10px 12px;
@@ -162,7 +163,19 @@ textarea {
   }
 
   .shadow-crisp {
-    box-shadow: 0 18px 45px rgba(14, 116, 144, 0.12);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  .admin-panel {
+    border: 1px solid rgb(226 232 240);
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  }
+
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 
   /* 管理后台底部 Tab 导航（手机专用） */
@@ -173,8 +186,10 @@ textarea {
     right: 0;
     z-index: 50;
     display: flex;
-    background: white;
-    border-top: 1px solid rgb(186 230 253);
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid rgb(226 232 240);
+    box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(12px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 

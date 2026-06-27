@@ -11,6 +11,7 @@ import {
   Download,
   Grid2X2,
   KeyRound,
+  List,
   Mail,
   Minus,
   PackageCheck,
@@ -54,10 +55,14 @@ type RemoteOrderStatus = {
   paid_at: string | null;
 };
 
+type ViewMode = "card" | "table";
+
 /* ─── Main component ─────────────────────────────────────── */
 
 export function Storefront({ categories, products, checkout_failed }: StorefrontProps) {
   const [categoryId, setCategoryId] = useState("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductRecord | null>(null);
   const [tracking, setTracking] = useState<TrackingInfo | null>(null);
 
@@ -69,10 +74,26 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
 
-  const filteredProducts =
+  const categoryProducts =
     categoryId === "all"
       ? products
       : products.filter((p) => p.category_id === categoryId);
+  const currentCategoryName =
+    categoryId === "all"
+      ? "全部商品"
+      : categories.find((category) => category.id === categoryId)?.name ?? "商品目录";
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredProducts = normalizedSearch
+    ? categoryProducts.filter((product) => {
+        const searchText = [
+          product.name,
+          product.subtitle,
+          product.description,
+          product.badge,
+        ].join(" ").toLowerCase();
+        return searchText.includes(normalizedSearch);
+      })
+    : categoryProducts;
 
   function openProduct(product: ProductRecord) {
     setSelectedProduct(product);
@@ -136,9 +157,9 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
   }
 
   return (
-    <div className="min-h-screen bg-[#eef9ff] text-[#162238]">
+    <div className="min-h-screen bg-slate-50 text-[#162238]">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-30 border-b border-sky-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:h-16 md:px-6">
           <a href="/" className="flex items-center gap-2 font-bold">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white md:h-9 md:w-9">
@@ -165,7 +186,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
 
       <main>
         {/* ── Notice ── */}
-        <section className="border-b border-sky-100 bg-[#e7f6ff]">
+        <section className="border-b border-slate-200 bg-sky-50">
           <div className="mx-auto max-w-7xl px-4 py-7 md:px-6">
             <div className="mb-4 flex items-center gap-2 font-bold">
               <ShieldCheck className="h-5 w-5 text-sky-500" />
@@ -176,7 +197,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                 下单失败，请检查数据库、商品库存或支付配置。
               </div>
             )}
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[
                 "本站商品用于合法业务测试，请按商品说明购买。",
                 "支付状态由服务端验签确认，页面跳转不代表到账。",
@@ -197,14 +218,45 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
 
         {/* ── Products ── */}
         <section className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 font-bold">
               <PackageCheck className="h-5 w-5 text-sky-500" />
               商品分组
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-1.5 text-sm">
-              <Grid2X2 className="h-4 w-4 text-sky-500" />
-              {filteredProducts.length} 件
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-1.5 text-sm">
+                <Grid2X2 className="h-4 w-4 text-sky-500" />
+                {filteredProducts.length} 件
+              </div>
+              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-sky-100 bg-white p-1 text-sm font-semibold shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("card");
+                    setSearchTerm("");
+                  }}
+                  className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
+                    viewMode === "card"
+                      ? "bg-sky-500 text-white"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                  }`}
+                >
+                  <Grid2X2 className="h-4 w-4" />
+                  卡片
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
+                    viewMode === "table"
+                      ? "bg-sky-500 text-white"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                  表格
+                </button>
+              </div>
             </div>
           </div>
 
@@ -274,53 +326,25 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
               </div>
             </aside>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  className="product-card group text-left"
-                  onClick={() => openProduct(product)}
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden bg-sky-50 sm:aspect-[16/9]">
-                    {product.image_url ? (
-                      <img
-                        src={product.image_url}
-                        alt={product.name}
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="grid h-full place-items-center bg-[linear-gradient(135deg,#effaff,#dff4ff)]">
-                        <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-16 sm:w-16" strokeWidth={1.4} />
-                      </div>
-                    )}
-                    {product.badge && (
-                      <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-xs font-bold text-white sm:left-3 sm:top-3">
-                        {product.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3 sm:p-4">
-                    <h2 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 sm:min-h-12 sm:text-base sm:leading-6">{product.name}</h2>
-                    <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-sm">
-                      {product.subtitle || product.description}
-                    </p>
-                    <div className="mt-3 flex items-end justify-between border-t border-dashed border-sky-100 pt-2 sm:mt-4 sm:pt-3">
-                      <div>
-                        <span className="text-xs text-sky-500 sm:text-sm">¥</span>
-                        <span className="text-lg font-bold text-sky-500 sm:text-2xl">
-                          {Number(product.price).toFixed(2)}
-                        </span>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1 sm:h-5 sm:w-5" />
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-xs text-slate-500 sm:mt-3">
-                      <span className="py-1.5">库存 {product.stock}</span>
-                      <span className="border-l border-slate-100 py-1.5">已售 {product.sold_count}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {viewMode === "card" ? (
+              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+                {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onOpen={() => openProduct(product)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <ProductTable
+                categoryName={currentCategoryName}
+                products={filteredProducts}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onOpen={openProduct}
+              />
+            )}
           </div>
         </section>
       </main>
@@ -336,7 +360,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
           {/* Drawer panel:
                手机端：从底部弹出，圆角，最高 92vh
                PC端：从右侧滑入，最宽 4xl */}
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-2xl bg-white shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:w-full sm:max-w-4xl sm:rounded-none">
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-lg bg-white shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:w-full sm:max-w-4xl sm:rounded-none">
             {/* 手机拖拽把手 */}
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
@@ -555,6 +579,177 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
   );
 }
 
+function ProductCard({
+  product,
+  onOpen,
+}: {
+  product: ProductRecord;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      className="product-card group text-left"
+      onClick={onOpen}
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-sky-50 sm:aspect-[16/9]">
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="grid h-full place-items-center bg-[linear-gradient(135deg,#effaff,#dff4ff)]">
+            <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-16 sm:w-16" strokeWidth={1.4} />
+          </div>
+        )}
+        {product.badge && (
+          <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-xs font-bold text-white sm:left-3 sm:top-3">
+            {product.badge}
+          </span>
+        )}
+      </div>
+      <div className="p-3 sm:p-4">
+        <h2 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 sm:min-h-12 sm:text-base sm:leading-6">
+          {product.name}
+        </h2>
+        <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-sm">
+          {product.subtitle || product.description}
+        </p>
+        <div className="mt-3 flex items-end justify-between border-t border-dashed border-sky-100 pt-2 sm:mt-4 sm:pt-3">
+          <div>
+            <span className="text-xs text-sky-500 sm:text-sm">¥</span>
+            <span className="text-lg font-bold text-sky-500 sm:text-2xl">
+              {Number(product.price).toFixed(2)}
+            </span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1 sm:h-5 sm:w-5" />
+        </div>
+        <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-xs text-slate-500 sm:mt-3">
+          <span className="py-1.5">库存 {product.stock}</span>
+          <span className="border-l border-slate-100 py-1.5">已售 {product.sold_count}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ProductTable({
+  categoryName,
+  products,
+  searchTerm,
+  onSearchChange,
+  onOpen,
+}: {
+  categoryName: string;
+  products: ProductRecord[];
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  onOpen: (product: ProductRecord) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-normal text-slate-400">Catalog</div>
+          <h2 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">
+            {categoryName}
+          </h2>
+        </div>
+        <label className="relative w-full lg:max-w-sm">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            className="h-11 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            value={searchTerm}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="搜索商品关键词"
+          />
+        </label>
+      </div>
+
+      <div className="p-3 sm:p-4">
+        <div className="hidden rounded-t-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_110px_90px_128px]">
+          <div>商品</div>
+          <div className="text-center">价格</div>
+          <div className="text-center">库存</div>
+          <div className="text-right">操作</div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 md:rounded-t-none md:border-t-0">
+          {products.length ? (
+            <div className="divide-y divide-slate-100">
+              {products.map((product) => (
+                <article
+                  key={product.id}
+                  className="grid gap-3 bg-white px-3 py-4 transition hover:bg-slate-50 sm:px-4 md:grid-cols-[minmax(0,1fr)_110px_90px_128px] md:items-center"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-sky-50 text-sky-500 ring-1 ring-sky-100">
+                      {product.image_url ? (
+                        <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <ShoppingBag className="h-7 w-7" strokeWidth={1.6} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => onOpen(product)}
+                        className="line-clamp-2 text-left text-base font-bold leading-5 text-slate-950 hover:text-sky-600"
+                      >
+                        {product.name}
+                      </button>
+                      <p className="mt-1 line-clamp-1 text-sm text-slate-500">
+                        {product.subtitle || product.description || "自动发货商品"}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {product.stock > 0 ? (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                            自动发货
+                          </span>
+                        ) : null}
+                        {product.badge ? (
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
+                            {product.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
+                    <span className="text-xs font-semibold text-slate-400 md:hidden">价格</span>
+                    <span className="text-lg font-bold text-slate-950">¥{Number(product.price).toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
+                    <span className="text-xs font-semibold text-slate-400 md:hidden">库存</span>
+                    <span>{product.stock}</span>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() => onOpen(product)}
+                    disabled={product.stock < 1}
+                    className="h-11 w-full bg-slate-950 shadow-none hover:bg-sky-600 md:ml-auto md:w-28"
+                  >
+                    <ShoppingBag className="h-4 w-4" />
+                    购买
+                  </Button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white px-4 py-12 text-center text-sm text-slate-400">
+              暂无匹配商品
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Order Tracking Modal ───────────────────────────────── */
 
 function OrderTrackingModal({
@@ -638,7 +833,7 @@ function OrderTrackingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="w-full max-w-lg overflow-y-auto rounded-t-2xl border border-sky-100 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-xl" style={{maxHeight: '90dvh'}}>
+      <div className="w-full max-w-lg overflow-y-auto rounded-t-lg border border-sky-100 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-lg" style={{maxHeight: '90dvh'}}>
         {/* Modal header */}
         <div className="flex items-start justify-between border-b border-sky-100 px-5 py-4">
           <div>

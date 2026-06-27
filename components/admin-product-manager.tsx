@@ -175,8 +175,8 @@ export function AdminProductManager({
   }
 
   return (
-    <div className="grid gap-4 lg:gap-5 lg:grid-cols-[320px_1fr]">
-      <aside className="rounded-lg border border-sky-100 bg-white p-4 shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+    <div className="grid gap-4 lg:gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <aside className="admin-panel p-4 xl:sticky xl:top-6 xl:self-start">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <div className="text-sm text-slate-500">商品库</div>
@@ -191,7 +191,7 @@ export function AdminProductManager({
           新增商品
         </Button>
 
-        <div className="max-h-64 space-y-2 overflow-y-auto pr-1 lg:max-h-[calc(100vh-280px)]">
+        <div className="touch-scroll max-h-[42vh] space-y-2 overflow-y-auto pr-1 sm:max-h-72 xl:max-h-[calc(100vh-280px)]">
           {products.map((product) => {
             const active = selectedProduct?.id === product.id;
             return (
@@ -207,7 +207,7 @@ export function AdminProductManager({
                 }
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="line-clamp-2 font-bold">{product.name}</div>
                     <div className="mt-1 text-sm text-slate-500">
                       ¥{Number(product.price).toFixed(2)} · 库存 {product.stock}
@@ -229,16 +229,16 @@ export function AdminProductManager({
         </div>
       </aside>
 
-      <section className="rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+      <section className="admin-panel min-w-0">
         <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
               <Edit3 className="h-4 w-4" />
               {selectedProduct ? "编辑商品" : "新增商品"}
             </div>
-            <h2 className="mt-1 text-xl font-bold">{form.name || "未命名商品"}</h2>
+            <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">{form.name || "未命名商品"}</h2>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
             {selectedProduct ? (
               <Button variant="outline" onClick={deactivateSelectedProduct} disabled={saving}>
                 <Trash2 className="h-4 w-4" />
@@ -252,7 +252,7 @@ export function AdminProductManager({
           </div>
         </div>
 
-        <div className="grid gap-5 p-5 xl:grid-cols-[1fr_320px]">
+        <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid gap-4">
             <div className="grid gap-4 md:grid-cols-2">
               <AdminField label="商品名称">
@@ -309,7 +309,7 @@ export function AdminProductManager({
             </label>
           </div>
 
-          <aside className="space-y-4">
+          <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
             <div className="rounded-md border border-sky-100 bg-sky-50 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold">
                 <LayoutGrid className="h-4 w-4 text-sky-500" />

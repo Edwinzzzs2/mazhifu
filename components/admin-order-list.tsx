@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -66,18 +66,18 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
   }
 
   if (loading) {
-    return <div className="px-6 py-4 text-sm text-slate-400">正在加载订单详情…</div>;
+    return <div className="px-4 py-4 text-sm text-slate-400 sm:px-6">正在加载订单详情…</div>;
   }
   if (!detail) {
-    return <div className="px-6 py-4 text-sm text-red-500">加载失败</div>;
+    return <div className="px-4 py-4 text-sm text-red-500 sm:px-6">加载失败</div>;
   }
 
   return (
-    <div className="grid gap-5 border-t border-sky-100 bg-sky-50/40 px-6 py-5 md:grid-cols-2">
+    <div className="grid gap-5 border-t border-sky-100 bg-sky-50/40 px-4 py-4 sm:px-6 sm:py-5 md:grid-cols-2">
       {/* 左：订单信息 */}
       <div className="space-y-3 text-sm">
         <div className="font-semibold text-slate-700">订单信息</div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <dl className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs sm:grid-cols-[auto_1fr] sm:gap-x-4">
           <dt className="text-slate-400">订单号</dt>
           <dd className="flex items-center gap-1.5 font-mono break-all">
             {detail.out_trade_no}
@@ -215,15 +215,15 @@ export function AdminOrderList() {
   }
 
   return (
-    <section className="mt-6 rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+    <section className="admin-panel min-w-0">
       {/* 标题栏 */}
       <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
             <ClipboardList className="h-4 w-4" />
             订单记录
           </div>
-          <h2 className="mt-1 text-xl font-bold">
+          <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">
             全部订单
             {total > 0 && (
               <span className="ml-2 text-base font-normal text-slate-400">共 {total} 笔</span>
@@ -235,6 +235,7 @@ export function AdminOrderList() {
           variant="outline"
           onClick={() => load(page, status, q)}
           disabled={loading}
+          className="w-full sm:w-auto"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           刷新
@@ -266,9 +267,9 @@ export function AdminOrderList() {
         </div>
 
         {/* 搜索 */}
-        <form onSubmit={handleSearch} className="flex gap-2">
+        <form onSubmit={handleSearch} className="flex gap-2 sm:shrink-0">
           <input
-            className="admin-input h-9 w-full text-sm sm:w-52"
+            className="admin-input h-9 w-full text-sm sm:w-56"
             placeholder="订单号 / 联系方式"
             value={inputQ}
             onChange={(e) => setInputQ(e.target.value)}
@@ -289,9 +290,8 @@ export function AdminOrderList() {
             </div>
           ) : (
             orders.map((order) => (
-              <>
+              <Fragment key={order.out_trade_no}>
                 <div
-                  key={order.out_trade_no}
                   className="cursor-pointer px-4 py-3 active:bg-sky-50/60"
                   onClick={() => toggleExpand(order.out_trade_no)}
                 >
@@ -322,11 +322,11 @@ export function AdminOrderList() {
                   </div>
                 </div>
                 {expandedId === order.out_trade_no && (
-                  <div key={`${order.out_trade_no}-detail`}>
+                  <div>
                     <OrderDetailPanel outTradeNo={order.out_trade_no} />
                   </div>
                 )}
-              </>
+              </Fragment>
             ))
           )}
         </div>
@@ -356,9 +356,8 @@ export function AdminOrderList() {
                 </tr>
               ) : (
                 orders.map((order) => (
-                  <>
+                  <Fragment key={order.out_trade_no}>
                     <tr
-                      key={order.out_trade_no}
                       className="cursor-pointer hover:bg-sky-50/60"
                       onClick={() => toggleExpand(order.out_trade_no)}
                     >
@@ -389,13 +388,13 @@ export function AdminOrderList() {
                       </td>
                     </tr>
                     {expandedId === order.out_trade_no && (
-                      <tr key={`${order.out_trade_no}-detail`}>
+                      <tr>
                         <td colSpan={9} className="p-0">
                           <OrderDetailPanel outTradeNo={order.out_trade_no} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -405,7 +404,7 @@ export function AdminOrderList() {
 
       {/* 分页 */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-sky-100 px-5 py-3 text-sm">
+        <div className="flex flex-col gap-3 border-t border-sky-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <span className="text-slate-400 text-xs">
             第 {page} / {totalPages} 页，共 {total} 笔
           </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -191,6 +191,128 @@ function OrderRow({ order }: { order: OrderSummary }) {
   );
 }
 
+function OrderCard({ order }: { order: OrderSummary }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const delivered = order.status === "paid" && order.fulfillment_status === "delivered";
+  const secretText = order.delivery_content.join("\n");
+
+  function copyAll() {
+    if (!secretText) return;
+    void navigator.clipboard.writeText(secretText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  function exportTxt() {
+    const blob = new Blob([secretText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `卡密-${order.out_trade_no}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <article className="border-b border-sky-50 last:border-0">
+      <button
+        type="button"
+        className="w-full px-4 py-3 text-left active:bg-sky-50/70"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {open ? (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              )}
+              <span className="font-mono text-xs text-sky-600">
+                #{order.out_trade_no.slice(-8).toUpperCase()}
+              </span>
+            </div>
+            <div className="mt-1 line-clamp-1 text-sm font-semibold">
+              {order.product_name}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span className="font-bold text-sky-600">¥{order.money}</span>
+              <span>×{order.quantity}</span>
+              <span>
+                {new Date(order.created_at).toLocaleString("zh-CN", {
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+          </div>
+          <StatusBadge status={order.status} fulfillment={order.fulfillment_status} />
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-sky-100 bg-sky-50/40 px-4 py-4">
+          <dl className="grid gap-1.5 text-sm">
+            <InfoItem label="完整订单号" value={order.out_trade_no} mono />
+            <InfoItem label="下单时间" value={new Date(order.created_at).toLocaleString("zh-CN")} />
+            {order.paid_at && (
+              <InfoItem label="付款时间" value={new Date(order.paid_at).toLocaleString("zh-CN")} />
+            )}
+          </dl>
+
+          {delivered && order.delivery_content.length > 0 ? (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+                <KeyRound className="h-3.5 w-3.5" />
+                卡密信息
+              </div>
+              <div className="space-y-1 rounded-md border border-emerald-100 bg-white p-3">
+                {order.delivery_content.map((secret, index) => (
+                  <div key={index} className="break-all font-mono text-sm text-slate-700">
+                    {secret}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={copyAll}
+                  className="flex items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {copied ? "已复制" : "复制全部"}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportTxt}
+                  className="flex items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  导出 TXT
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md border border-sky-100 bg-white px-3 py-3 text-sm text-slate-500">
+              {delivered
+                ? "暂无卡密记录"
+                : order.status === "paid"
+                  ? "已支付，未发货"
+                  : order.status === "pending"
+                    ? "等待支付"
+                    : "订单已过期，无卡密"}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
 function InfoItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-sky-100 pb-1.5 last:border-0">
@@ -236,17 +358,17 @@ export default function QueryOrderPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#eef9ff] px-4 py-10 text-[#162238]">
-      <div className="mx-auto w-full max-w-3xl space-y-6">
+    <main className="min-h-screen bg-slate-50 px-3 py-5 text-[#162238] sm:px-4 sm:py-10">
+      <div className="mx-auto w-full max-w-4xl space-y-5 sm:space-y-6">
         {/* Query form */}
-        <section className="rounded-xl border border-sky-100 bg-white p-6 shadow-[0_18px_45px_rgba(14,116,144,0.12)]">
+        <section className="admin-panel p-4 sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
                 <Search className="h-4 w-4" />
                 查询订单
               </div>
-              <h1 className="mt-1.5 text-2xl font-bold">我的订单</h1>
+              <h1 className="mt-1.5 text-xl font-bold sm:text-2xl">我的订单</h1>
               <p className="mt-1.5 text-sm text-slate-500">
                 输入下单时填写的联系方式和查单密码，查看所有订单记录。
               </p>
@@ -313,15 +435,15 @@ export default function QueryOrderPage() {
 
         {/* Results table */}
         {queried && !loading && orders !== null && (
-          <section className="overflow-hidden rounded-xl border border-sky-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-sky-100 px-5 py-3">
+          <section className="admin-panel overflow-hidden">
+            <div className="flex flex-col gap-1 border-b border-sky-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="text-sm font-semibold">
                 {orders.length > 0
                   ? `共找到 ${orders.length} 笔订单`
                   : "未找到匹配的订单"}
               </div>
               {orders.length > 0 && (
-                <div className="text-xs text-slate-400">点击行展开详情 / 卡密</div>
+                <div className="text-xs text-slate-400">点击订单展开详情 / 卡密</div>
               )}
             </div>
 
@@ -330,25 +452,32 @@ export default function QueryOrderPage() {
                 邮箱或查单密码不正确，请核对后重试
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-sky-100 bg-sky-50 text-xs text-slate-500">
-                      <th className="px-4 py-2.5 text-left font-semibold">订单号</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">商品名称</th>
-                      <th className="px-4 py-2.5 text-center font-semibold">数量</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">金额</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">状态</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">下单时间</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((order) => (
-                      <OrderRow key={order.out_trade_no} order={order} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="md:hidden">
+                  {orders.map((order) => (
+                    <OrderCard key={order.out_trade_no} order={order} />
+                  ))}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead>
+                      <tr className="border-b border-sky-100 bg-sky-50 text-xs text-slate-500">
+                        <th className="px-4 py-2.5 text-left font-semibold">订单号</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">商品名称</th>
+                        <th className="px-4 py-2.5 text-center font-semibold">数量</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">金额</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">状态</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">下单时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => (
+                        <OrderRow key={order.out_trade_no} order={order} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
         )}

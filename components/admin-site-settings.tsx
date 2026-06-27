@@ -83,17 +83,17 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-      <section className="rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="admin-panel min-w-0">
         <div className="flex flex-col gap-3 border-b border-sky-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
               <Settings2 className="h-4 w-4" />
               基本信息
             </div>
-            <h2 className="mt-1 text-xl font-bold">{settings.site_name || "未命名站点"}</h2>
+            <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">{settings.site_name || "未命名站点"}</h2>
           </div>
-          <Button onClick={saveSettings} disabled={saving} className="bg-emerald-500 shadow-none hover:bg-emerald-600">
+          <Button onClick={saveSettings} disabled={saving} className="w-full bg-emerald-500 shadow-none hover:bg-emerald-600 sm:w-auto">
             <Save className="h-4 w-4" />
             {saving ? "保存中" : "保存设置"}
           </Button>
@@ -207,13 +207,13 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
         </div>
       </section>
 
-      <aside className="space-y-4">
-        <div className="rounded-lg border border-sky-100 bg-white p-4 shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+      <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+        <div className="admin-panel p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold">
             <Store className="h-4 w-4 text-sky-500" />
             前台品牌预览
           </div>
-          <div className="rounded-md border border-sky-100 bg-[#eef9ff] p-4">
+          <div className="rounded-md border border-sky-100 bg-sky-50 p-4">
             <div className="flex items-center gap-2 font-bold">
               <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-md bg-sky-500 text-white">
                 {settings.site_logo_url ? (
@@ -233,7 +233,7 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
           </div>
         </div>
 
-        <div className="rounded-lg border border-sky-100 bg-white p-4 shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+        <div className="admin-panel p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold">
             <ListChecks className="h-4 w-4 text-sky-500" />
             购买须知预览

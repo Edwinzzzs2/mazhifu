@@ -30,14 +30,14 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
   const error = searchParams?.error;
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#eef9ff] px-4 text-[#162238]">
-      <section className="w-full max-w-md rounded-lg border border-sky-100 bg-white p-6 shadow-[0_18px_45px_rgba(14,116,144,0.12)]">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
+    <main className="grid min-h-screen place-items-center bg-slate-50 px-3 py-6 text-[#162238] sm:px-4">
+      <section className="admin-panel w-full max-w-md p-5 sm:p-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="min-w-0">
             <div className="text-sm font-bold text-sky-600">后台登录</div>
-            <h1 className="mt-1 text-2xl font-bold">{siteSettings.site_name}管理台</h1>
+            <h1 className="mt-1 truncate text-xl font-bold sm:text-2xl">{siteSettings.site_name}管理台</h1>
           </div>
-          <LockKeyhole className="h-10 w-10 text-sky-500" />
+          <LockKeyhole className="h-10 w-10 shrink-0 text-sky-500" />
         </div>
 
         {!configured ? (

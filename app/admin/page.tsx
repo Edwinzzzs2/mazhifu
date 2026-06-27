@@ -65,11 +65,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   ]);
 
   return (
-    <div className="flex min-h-screen bg-[#eef9ff] text-[#162238]">
+    <div className="flex min-h-screen bg-slate-50 text-[#162238]">
       {/* ── Sidebar（PC 可见，手机隐藏）── */}
-      <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-56 md:shrink-0 md:flex-col md:border-r md:border-sky-100 md:bg-white">
+      <aside className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:border-r md:border-slate-200 md:bg-white">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2.5 border-b border-sky-100 px-4 font-bold">
+        <div className="flex h-16 items-center gap-2.5 border-b border-slate-200 px-4 font-bold">
           <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white">
             <Store className="h-4 w-4" />
           </span>
@@ -95,7 +95,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </nav>
 
         {/* Footer */}
-        <div className="space-y-1 border-t border-sky-100 p-2">
+        <div className="space-y-1 border-t border-slate-200 p-2">
           <Link
             href="/"
             target="_blank"
@@ -118,45 +118,54 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
       {/* ── Main content ── */}
       <main className="min-w-0 flex-1 px-3 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
-        {/* Page title */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {TABS.map(({ key, icon: Icon }) =>
-              tab === key ? (
-                <div key={key} className="flex items-center gap-2">
-                  <Icon className="h-5 w-5 text-sky-500" />
-                  <h1 className="text-lg font-bold md:text-xl">{TAB_LABELS[key]}</h1>
-                </div>
-              ) : null,
-            )}
-          </div>
-          {/* 手机端顶部快捷入口 */}
-          <div className="flex items-center gap-2 md:hidden">
-            <Link
-              href="/"
-              target="_blank"
-              className="grid h-9 w-9 place-items-center rounded-md border border-sky-200 bg-white text-slate-500"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Link>
-            <form action="/api/admin/logout" method="post">
-              <button
-                type="submit"
+        <div className="mx-auto w-full max-w-[1480px]">
+          {/* Page title */}
+          <div className="mb-4 flex items-center justify-between gap-3 md:mb-5">
+            <div className="min-w-0">
+              {TABS.map(({ key, icon: Icon }) =>
+                tab === key ? (
+                  <div key={key} className="flex min-w-0 items-center gap-2">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-white text-sky-500 shadow-sm ring-1 ring-slate-200">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-slate-400">
+                        {siteSettings.site_name} 管理中心
+                      </div>
+                      <h1 className="truncate text-lg font-bold md:text-xl">{TAB_LABELS[key]}</h1>
+                    </div>
+                  </div>
+                ) : null,
+              )}
+            </div>
+            {/* 手机端顶部快捷入口 */}
+            <div className="flex items-center gap-2 md:hidden">
+              <Link
+                href="/"
+                target="_blank"
                 className="grid h-9 w-9 place-items-center rounded-md border border-sky-200 bg-white text-slate-500"
               >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </form>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <form action="/api/admin/logout" method="post">
+                <button
+                  type="submit"
+                  className="grid h-9 w-9 place-items-center rounded-md border border-sky-200 bg-white text-slate-500"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
           </div>
-        </div>
 
-        {/* Tab content */}
-        {tab === "products" && (
-          <AdminProductManager initial_categories={categories} initial_products={products} />
-        )}
-        {tab === "inventory" && <AdminCardInventory products={products} />}
-        {tab === "orders" && <AdminOrderList />}
-        {tab === "settings" && <AdminSiteSettings initial_settings={siteSettings} />}
+          {/* Tab content */}
+          {tab === "products" && (
+            <AdminProductManager initial_categories={categories} initial_products={products} />
+          )}
+          {tab === "inventory" && <AdminCardInventory products={products} />}
+          {tab === "orders" && <AdminOrderList />}
+          {tab === "settings" && <AdminSiteSettings initial_settings={siteSettings} />}
+        </div>
       </main>
 
       {/* ── 手机底部 Tab 栏 ── */}

@@ -24,6 +24,7 @@ const emptyStats: CardSecretStats = {
   used: 0,
 };
 
+// 只取 CSV 首列，兼容引号包裹、逗号和双引号转义的卡密内容。
 function parseCsvFirstCell(line: string) {
   const trimmed = line.trim();
   if (!trimmed.startsWith("\"")) {
@@ -183,14 +184,14 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
   }
 
   return (
-    <section className="mt-6 rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.08)]">
+    <section className="admin-panel min-w-0">
       <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
             <PackageCheck className="h-4 w-4" />
             卡密库存
           </div>
-          <h2 className="mt-1 text-xl font-bold">
+          <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">
             {selectedProduct ? selectedProduct.name : "选择商品后导入卡密"}
           </h2>
         </div>
@@ -199,13 +200,14 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
           variant="outline"
           onClick={() => loadInventory()}
           disabled={loading}
+          className="w-full sm:w-auto"
         >
           <RefreshCw className={"h-4 w-4 " + (loading ? "animate-spin" : "")} />
           刷新
         </Button>
       </div>
 
-      <div className="grid gap-5 p-5 xl:grid-cols-[380px_1fr]">
+      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[340px_minmax(0,1fr)]">
         <aside className="space-y-4">
           <label className="grid gap-2 text-sm font-semibold">
             目标商品
@@ -222,7 +224,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
             </select>
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-semibold">
               批次号
               <input
@@ -292,8 +294,8 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
           ) : null}
         </aside>
 
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-4">
+        <div className="min-w-0 space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="总数" value={stats.total} />
             <StatCard label="可用" value={stats.available} accent="text-emerald-600" />
             <StatCard label="预占" value={stats.reserved} accent="text-amber-600" />
@@ -303,7 +305,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
           <div className="flex flex-col gap-3 rounded-md border border-sky-100 bg-sky-50 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-semibold">库存明细</div>
             <select
-              className="admin-input max-w-44 bg-white"
+              className="admin-input bg-white sm:max-w-44"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >
@@ -314,8 +316,26 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
             </select>
           </div>
 
-          <div className="overflow-hidden rounded-md border border-sky-100">
-            <div className="max-h-[520px] overflow-auto">
+          <div className="grid gap-3 lg:hidden">
+            {cardSecrets.length ? (
+              cardSecrets.map((secret) => (
+                <SecretCard
+                  key={secret.id}
+                  secret={secret}
+                  copied={copiedId === secret.id}
+                  onCopy={() => copySecret(secret)}
+                  onDelete={() => deleteSecret(secret.id)}
+                />
+              ))
+            ) : (
+              <div className="rounded-md border border-sky-100 bg-white px-4 py-10 text-center text-sm text-slate-500">
+                {loading ? "正在读取库存" : "暂无卡密"}
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-hidden rounded-md border border-sky-100 lg:block">
+            <div className="touch-scroll max-h-[520px] overflow-auto">
               <table className="w-full min-w-[760px] border-collapse bg-white text-sm">
                 <thead className="sticky top-0 bg-sky-50 text-left text-xs uppercase text-slate-500">
                   <tr>
@@ -383,6 +403,63 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+function SecretCard({
+  secret,
+  copied,
+  onCopy,
+  onDelete,
+}: {
+  secret: CardSecretRecord;
+  copied: boolean;
+  onCopy: () => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
+  return (
+    <article className="rounded-md border border-sky-100 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="break-all font-mono text-xs text-slate-400">{secret.id}</div>
+          <div className="mt-2 break-all font-mono text-sm font-semibold text-slate-800">
+            {secret.secret}
+          </div>
+        </div>
+        <StatusPill status={secret.status} />
+      </div>
+      <div className="mt-3 grid gap-2 text-xs text-slate-500">
+        <div className="flex items-start justify-between gap-3">
+          <span className="shrink-0">订单</span>
+          <span className="break-all text-right">{secret.order_no || "-"}</span>
+        </div>
+        <div className="flex items-start justify-between gap-3">
+          <span className="shrink-0">批次</span>
+          <span className="break-all text-right">{secret.batch_no || "-"}</span>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => { void onCopy(); }}
+        >
+          <Copy className="h-4 w-4" />
+          {copied ? "已复制" : "复制"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={secret.status !== "available"}
+          onClick={() => { void onDelete(); }}
+        >
+          <Trash2 className="h-4 w-4" />
+          删除
+        </Button>
+      </div>
+    </article>
   );
 }
 

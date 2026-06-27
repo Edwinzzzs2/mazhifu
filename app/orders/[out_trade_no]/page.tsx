@@ -33,14 +33,14 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
     encodeURIComponent(accessToken);
 
   return (
-    <main className="min-h-screen bg-[#eef9ff] px-4 py-8 text-[#162238]">
-      <section className="mx-auto w-full max-w-4xl overflow-hidden rounded-lg border border-sky-100 bg-white shadow-[0_18px_45px_rgba(14,116,144,0.12)]">
-        <div className="flex items-center justify-between gap-4 border-b border-sky-100 px-6 py-5">
-          <div>
+    <main className="min-h-screen bg-slate-50 px-3 py-5 text-[#162238] sm:px-4 sm:py-8">
+      <section className="admin-panel mx-auto w-full max-w-4xl overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-sky-100 px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-w-0">
             <Badge className={paid ? "bg-emerald-500" : "bg-sky-500"}>
               {paid ? "支付成功" : "订单追踪"}
             </Badge>
-            <h1 className="mt-3 text-2xl font-bold">{order.product_name}</h1>
+            <h1 className="mt-3 line-clamp-2 text-xl font-bold sm:text-2xl">{order.product_name}</h1>
             <p className="mt-1 break-all text-sm text-slate-500">{order.out_trade_no}</p>
           </div>
           {paid ? (
@@ -50,11 +50,11 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
           )}
         </div>
 
-        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_340px]">
+        <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
           <div className="space-y-5">
             <div className="rounded-md bg-sky-50 p-5">
               <div className="text-sm text-slate-500">实付金额</div>
-              <div className="mt-2 text-5xl font-bold text-sky-500">
+              <div className="mt-2 text-4xl font-bold text-sky-500 sm:text-5xl">
                 ¥{Number(order.money).toFixed(2)}
               </div>
             </div>
