@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
 import { createOrder } from "@/lib/orders";
+import { scheduleOrderExpiration } from "@/lib/order-expiration-scheduler";
 import { getProductById } from "@/lib/products";
 import { getRequestOrigin } from "@/lib/request-utils";
 import { createLogger } from "@/lib/logger";
@@ -29,6 +30,8 @@ export async function POST(request: Request) {
     }
 
     const created = await createOrder(product, payType, quantity, contact, queryPassword);
+    await scheduleOrderExpiration(created.order);
+
     const accessToken = created.access_token;
     const origin = getRequestOrigin();
 

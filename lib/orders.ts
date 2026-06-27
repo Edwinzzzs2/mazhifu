@@ -7,8 +7,6 @@ import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
 import type { ProductRecord } from "@/lib/products";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
-const queueLogger = createLogger("queue");
-const fallbackExpireLogger = createLogger("fallback:expire");
 const paymentLogger = createLogger("orders:payment");
 const queryLogger = createLogger("orders:query");
 
@@ -161,41 +159,6 @@ export async function createOrder(
     await client.query("COMMIT");
 
     const createdOrder = result.rows[0];
-
-    // 下单成功后，立即往队列投一个延迟过期任务（到期自动取消 + 释放卡密）
-    const delayMs = expiresMinutes * 60 * 1000;
-    try {
-      const { orderExpireQueue } = await import("@/lib/queue");
-      await orderExpireQueue.add(
-        "expire",
-        { out_trade_no: outTradeNo },
-        {
-          delay: delayMs,
-          jobId: `expire:${outTradeNo}`,
-        },
-      );
-    } catch (queueErr) {
-      // 队列不可用时，用进程内 setTimeout 做本地兜底（进程重启会丢失，但至少覆盖大部分场景）
-      queueLogger.error("expire job enqueue failed; enabling local setTimeout fallback", {
-        out_trade_no: outTradeNo,
-        error: queueErr,
-      });
-      setTimeout(async () => {
-        try {
-          const { expireSingleOrder } = await import("@/lib/order-expiration");
-          const expired = await expireSingleOrder(outTradeNo);
-          fallbackExpireLogger.info("expire fallback completed", {
-            out_trade_no: outTradeNo,
-            expired,
-          });
-        } catch (err) {
-          fallbackExpireLogger.error("expire fallback failed", {
-            out_trade_no: outTradeNo,
-            error: err,
-          });
-        }
-      }, delayMs);
-    }
 
     return { order: createdOrder, access_token: accessToken };
   } catch (error) {
