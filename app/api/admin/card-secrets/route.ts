@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "导入卡密失败";
+    const message = error instanceof Error ? error.message : "导入发货内容失败";
     return NextResponse.json({ message }, { status: 400 });
   }
 }

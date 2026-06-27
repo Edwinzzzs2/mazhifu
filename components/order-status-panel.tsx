@@ -105,7 +105,7 @@ export function OrderStatusPanel({
         <div className="mt-3 text-lg font-bold">{statusLabel}</div>
         <div className="mt-1 text-sm text-slate-500">
           {delivered
-            ? "卡密已生成，请及时保存"
+            ? "发货内容已生成，请及时保存"
             : waitingDelivery
               ? "已确认到账，库存不足时请联系商家补发"
             : expired

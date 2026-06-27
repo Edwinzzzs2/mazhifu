@@ -530,7 +530,7 @@ export function Storefront({
                       />
                     </div>
                     <p className="mt-1 text-xs font-normal text-slate-400">
-                      请记住此密码，支付后凭邮箱 + 查单密码查看卡密
+                      请记住此密码，支付后凭邮箱 + 查单密码查看发货内容
                     </p>
                   </label>
 
@@ -876,7 +876,7 @@ function OrderTrackingModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `卡密-${info.out_trade_no}.txt`;
+    a.download = `发货内容-${info.out_trade_no}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -938,7 +938,7 @@ function OrderTrackingModal({
                 </div>
                 <div className="mt-1 text-sm text-slate-500">
                   {delivered
-                    ? "卡密已生成，请及时保存"
+                    ? "发货内容已生成，请及时保存"
                     : paid
                       ? "已到账，库存不足时请联系补发"
                       : expired
@@ -991,7 +991,7 @@ function OrderTrackingModal({
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800">
                     <KeyRound className="h-4 w-4" />
-                    卡密信息
+                    发货内容
                     <span className="ml-auto text-xs font-normal text-emerald-600">
                       格式 账号----密码
                     </span>

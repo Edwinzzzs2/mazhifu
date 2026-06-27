@@ -111,10 +111,10 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
         </dl>
       </div>
 
-      {/* 右：已发卡密 */}
+      {/* 右：已发内容 */}
       <div className="space-y-3 text-sm">
         <div className="font-semibold text-slate-700">
-          已发卡密
+          已发内容
           {detail.delivery_secrets.length > 0 && (
             <span className="ml-2 text-xs font-normal text-slate-400">
               共 {detail.delivery_secrets.length} 张
@@ -123,7 +123,7 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
         </div>
         {detail.delivery_secrets.length === 0 ? (
           <div className="text-xs text-slate-400">
-            {detail.fulfillment_status === "delivered" ? "卡密为空" : "未发货"}
+            {detail.fulfillment_status === "delivered" ? "发货内容为空" : "未发货"}
           </div>
         ) : (
           <ul className="space-y-1.5">
@@ -357,11 +357,11 @@ export function AdminOrderList() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="mt-1 text-xs"
+                        className="mt-1 w-20 text-xs"
                         disabled={verifyingId === order.out_trade_no}
                         onClick={(e) => handleVerify(e, order.out_trade_no)}
                       >
-                        <ShieldCheck className="mr-1 h-3 w-3" />
+                        <ShieldCheck className="h-3 w-3 shrink-0" />
                         {verifyingId === order.out_trade_no ? "核实中" : "核实"}
                       </Button>
                     </div>
@@ -391,7 +391,7 @@ export function AdminOrderList() {
                 <th className="px-4 py-3">支付状态</th>
                 <th className="px-4 py-3">发货状态</th>
                 <th className="px-4 py-3">下单时间</th>
-                <th className="px-4 py-3">操作</th>
+                <th className="w-24 px-4 py-3">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -437,11 +437,11 @@ export function AdminOrderList() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs"
+                          className="w-20 text-xs"
                           disabled={verifyingId === order.out_trade_no}
                           onClick={(e) => handleVerify(e, order.out_trade_no)}
                         >
-                          <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                           {verifyingId === order.out_trade_no ? "核实中…" : "核实"}
                         </Button>
                       </td>

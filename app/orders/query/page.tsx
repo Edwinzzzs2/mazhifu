@@ -88,7 +88,7 @@ function OrderRow({ order }: { order: OrderSummary }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `卡密-${order.out_trade_no}.txt`;
+    a.download = `发货内容-${order.out_trade_no}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -148,7 +148,7 @@ function OrderRow({ order }: { order: OrderSummary }) {
                 <div>
                   <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
                     <KeyRound className="h-3.5 w-3.5" />
-                    卡密信息
+                    发货内容
                   </div>
                   <div className="space-y-1 rounded-lg border border-emerald-100 bg-white p-3">
                     {order.delivery_content.map((s, i) => (
@@ -175,12 +175,12 @@ function OrderRow({ order }: { order: OrderSummary }) {
                   </div>
                 </div>
               ) : delivered ? (
-                <div className="text-sm text-slate-400">暂无卡密记录</div>
+                <div className="text-sm text-slate-400">暂无发货内容</div>
               ) : order.status === "paid" ? (
                 <div className="text-sm text-slate-400">已支付，未发货</div>
               ) : (
                 <div className="text-sm text-slate-400">
-                  {order.status === "pending" ? "等待支付" : "订单已过期，无卡密"}
+                  {order.status === "pending" ? "等待支付" : "订单已过期，无发货内容"}
                 </div>
               )}
             </div>
@@ -210,7 +210,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `卡密-${order.out_trade_no}.txt`;
+    a.download = `发货内容-${order.out_trade_no}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -268,7 +268,7 @@ function OrderCard({ order }: { order: OrderSummary }) {
             <div className="mt-4">
               <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
                 <KeyRound className="h-3.5 w-3.5" />
-                卡密信息
+                发货内容
               </div>
               <div className="space-y-1 rounded-md border border-emerald-100 bg-white p-3">
                 {order.delivery_content.map((secret, index) => (
@@ -299,12 +299,12 @@ function OrderCard({ order }: { order: OrderSummary }) {
           ) : (
             <div className="mt-4 rounded-md border border-sky-100 bg-white px-3 py-3 text-sm text-slate-500">
               {delivered
-                ? "暂无卡密记录"
+                ? "暂无发货内容"
                 : order.status === "paid"
                   ? "已支付，未发货"
                   : order.status === "pending"
                     ? "等待支付"
-                    : "订单已过期，无卡密"}
+                    : "订单已过期，无发货内容"}
             </div>
           )}
         </div>
@@ -443,7 +443,7 @@ export default function QueryOrderPage() {
                   : "未找到匹配的订单"}
               </div>
               {orders.length > 0 && (
-                <div className="text-xs text-slate-400">点击订单展开详情 / 卡密</div>
+                <div className="text-xs text-slate-400">点击订单展开详情 / 发货内容</div>
               )}
             </div>
 

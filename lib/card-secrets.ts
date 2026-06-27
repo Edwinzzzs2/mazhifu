@@ -76,7 +76,7 @@ export async function importCardSecrets(input: ImportCardSecretsInput) {
   const productId = input.product_id.trim();
   const normalized = normalizeSecrets(input.secrets, input.deduplicate !== false);
   if (!productId || normalized.length === 0) {
-    throw new Error("卡密内容不能为空");
+    throw new Error("发货内容不能为空");
   }
 
   const product = await getPool().query<{ id: string }>(

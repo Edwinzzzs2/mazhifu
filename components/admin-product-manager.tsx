@@ -271,7 +271,7 @@ export function AdminProductManager({
               <AdminField label="价格">
                 <input className="admin-input" value={form.price} onChange={(event) => updateField("price", event.target.value)} />
               </AdminField>
-              <AdminField label="可用卡密">
+              <AdminField label="可用库存">
                 <input className="admin-input bg-slate-50 text-slate-500" value={form.stock} readOnly />
               </AdminField>
               <AdminField label="副标题">
@@ -344,7 +344,7 @@ export function AdminProductManager({
               </div>
               <div className="flex items-center gap-2">
                 <Check className="h-4 w-4 text-emerald-500" />
-                库存来自可用卡密数量
+                库存来自可用发货内容数量
               </div>
               <div className="flex items-center gap-2">
                 <EyeOff className="h-4 w-4 text-slate-400" />
