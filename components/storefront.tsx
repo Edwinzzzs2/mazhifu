@@ -401,7 +401,7 @@ export function Storefront({
           {/* Drawer panel:
                手机端：从底部弹出，圆角，最高 92vh
                PC端：从右侧滑入，最宽 4xl */}
-          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:bottom-auto sm:h-auto sm:w-full sm:max-w-4xl sm:rounded-none sm:pb-0">
+          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:h-[100dvh] sm:w-full sm:max-w-4xl sm:rounded-none sm:pb-0">
             {/* 手机拖拽把手 */}
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
@@ -419,7 +419,7 @@ export function Storefront({
             </div>
 
             {/* Drawer body */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
               {/* Left: product info（仅 lg+ 可见） */}
               <div className="hidden w-[55%] flex-col gap-5 overflow-y-auto border-r border-sky-100 bg-slate-50/50 p-6 lg:flex">
                 <div className="overflow-hidden rounded-lg bg-sky-50">
@@ -470,9 +470,9 @@ export function Storefront({
               {/* Right: order form */}
               <form
                 onSubmit={(e) => { void handleCheckout(e); }}
-                className="flex flex-1 flex-col overflow-y-auto"
+                className="flex min-h-0 flex-1 flex-col"
               >
-                <div className="flex-1 space-y-4 p-4 sm:p-5">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
                   {/* 手机端简要商品信息 */}
                   <div className="flex items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 p-3 lg:hidden">
                     {selectedProduct.image_url ? (
