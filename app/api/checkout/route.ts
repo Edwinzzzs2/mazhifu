@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { buildMapaySubmitUrl } from "@/lib/mapay";
-import { createOrder } from "@/lib/orders";
+import { createMapayPayment, buildMapaySubmitUrl } from "@/lib/mapay";
+import { createOrder, updateOrderTradeNo } from "@/lib/orders";
 import { getProductById } from "@/lib/products";
 import { getRequestOrigin } from "@/lib/request-utils";
 
@@ -30,16 +30,37 @@ export async function POST(request: Request) {
     const accessToken = created.access_token;
     const origin = getRequestOrigin();
 
+    const payOptions = {
+      order: created.order,
+      pay_type: payType,
+      request_origin: origin,
+      access_token: accessToken,
+    };
+
     let payUrl = "";
+    let tradeNo: string | null = null;
+
+    // 优先使用 MAPI 接口（后端调用，可获取 trade_no）
     try {
-      payUrl = buildMapaySubmitUrl({
-        order: created.order,
-        pay_type: payType,
-        request_origin: origin,
-        access_token: accessToken,
-      });
-    } catch {
-      payUrl = `${origin}/pay/${encodeURIComponent(created.order.out_trade_no)}?token=${encodeURIComponent(accessToken)}`;
+      const mapiResult = await createMapayPayment(payOptions);
+      tradeNo = mapiResult.trade_no || null;
+      payUrl = mapiResult.payurl || mapiResult.qrcode || mapiResult.urlscheme || "";
+
+      // 把 trade_no 存入订单
+      if (tradeNo) {
+        await updateOrderTradeNo(created.order.out_trade_no, tradeNo);
+      }
+    } catch (mapiErr) {
+      console.warn("[checkout] MAPI 调用失败，降级到 Submit 跳转", mapiErr);
+    }
+
+    // MAPI 没拿到 payUrl，降级用 Submit 拼 URL
+    if (!payUrl) {
+      try {
+        payUrl = buildMapaySubmitUrl(payOptions);
+      } catch {
+        payUrl = `${origin}/pay/${encodeURIComponent(created.order.out_trade_no)}?token=${encodeURIComponent(accessToken)}`;
+      }
     }
 
     return NextResponse.json({
@@ -47,6 +68,7 @@ export async function POST(request: Request) {
       pay_type: payType,
       out_trade_no: created.order.out_trade_no,
       access_token: accessToken,
+      trade_no: tradeNo,
     });
   } catch (error) {
     console.error("checkout failed", error);

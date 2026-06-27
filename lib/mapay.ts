@@ -3,14 +3,6 @@ import type { OrderRecord } from "@/lib/orders";
 
 export type MapayPayload = Record<string, string>;
 
-type BuildMapaySubmitUrlOptions = {
-  order: OrderRecord;
-  pay_type: string;
-  request_origin: string;
-  access_token: string;
-  site_name?: string;
-};
-
 export type MapayQueryResult = {
   code: number | string;
   msg?: string;
@@ -96,6 +88,94 @@ export function createMapaySign(params: MapayPayload, key: string) {
 
   const signSource = sorted.map(([field, value]) => `${field}=${value}`).join("&");
   return crypto.createHash("md5").update(`${signSource}${key}`).digest("hex");
+}
+
+export type MapayCreateResult = {
+  code: number | string;
+  msg?: string;
+  trade_no?: string;
+  payurl?: string;
+  qrcode?: string;
+  urlscheme?: string;
+  money?: string;
+  [key: string]: unknown;
+};
+
+export type BuildMapaySubmitUrlOptions = {
+  order: OrderRecord;
+  pay_type: string;
+  request_origin: string;
+  access_token: string;
+  site_name?: string;
+};
+
+/**
+ * MAPI 接口：后端发起支付请求，返回 trade_no + payurl/qrcode。
+ * 成功后可以把 trade_no 存入订单（创建时就有平台流水号）。
+ */
+export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): Promise<MapayCreateResult> {
+  const { order, pay_type, request_origin, access_token } = options;
+  const pid = getRequiredEnv("MAPAY_PID");
+  const key = getRequiredEnv("MAPAY_KEY");
+  const appUrl = getAppUrl(request_origin);
+  const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
+  const returnUrl = new URL("/pay/return", appUrl);
+  returnUrl.searchParams.set("token", access_token);
+
+  const params: MapayPayload = {
+    pid,
+    type: pay_type,
+    out_trade_no: order.out_trade_no,
+    notify_url: notifyUrl,
+    return_url: returnUrl.toString(),
+    name: order.product_name.slice(0, 127),
+    money: Number(order.money).toFixed(2),
+    param: order.product_id,
+    channel_id: process.env.MAPAY_CHANNEL_ID || "",
+    device: process.env.MAPAY_DEVICE || "pc",
+  };
+
+  const signedParams = {
+    ...params,
+    sign: createMapaySign(params, key),
+    sign_type: "MD5",
+  };
+
+  const mapiUrl = process.env.MAPAY_MAPI_URL || "https://mzf.mapay.cc/xpay/epay/mapi.php";
+
+  console.log("[mapay:mapi] request", {
+    out_trade_no: order.out_trade_no,
+    url: mapiUrl,
+    pay_type,
+  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAPAY_QUERY_TIMEOUT_MS);
+  const response = await fetch(mapiUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(signedParams).toString(),
+    cache: "no-store",
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
+
+  const responseText = await response.text();
+  console.log("[mapay:mapi] response", {
+    out_trade_no: order.out_trade_no,
+    status: response.status,
+    raw_body: responseText,
+  });
+
+  if (!response.ok) {
+    throw new Error(`MAPI request failed with HTTP ${response.status}: ${responseText}`);
+  }
+
+  const result = JSON.parse(responseText) as MapayCreateResult;
+  if (Number(result.code) !== 1) {
+    throw new Error(`MAPI error: ${result.msg || "unknown"}`);
+  }
+
+  return result;
 }
 
 export function buildMapaySubmitUrl({

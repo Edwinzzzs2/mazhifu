@@ -191,6 +191,17 @@ export async function createOrder(
   }
 }
 
+/**
+ * 更新订单的平台流水号（MAPI 创建支付时返回）。
+ * 使用 COALESCE 确保不覆盖已有的 trade_no。
+ */
+export async function updateOrderTradeNo(outTradeNo: string, tradeNo: string) {
+  await getPool().query(
+    `UPDATE orders SET trade_no = COALESCE(trade_no, $2) WHERE out_trade_no = $1`,
+    [outTradeNo, tradeNo],
+  );
+}
+
 export async function getOrderByOutTradeNo(outTradeNo: string) {
   await ensureStoreSchema();
   const result = await getPool().query<OrderRecord>(
