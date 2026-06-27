@@ -358,7 +358,7 @@ export default function QueryOrderPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-3 py-5 text-[#162238] sm:px-4 sm:py-10">
+    <main className="page-shell px-3 py-5 sm:px-4 sm:py-10">
       <div className="mx-auto w-full max-w-4xl space-y-5 sm:space-y-6">
         {/* Query form */}
         <section className="admin-panel p-4 sm:p-6">
@@ -436,7 +436,7 @@ export default function QueryOrderPage() {
         {/* Results table */}
         {queried && !loading && orders !== null && (
           <section className="admin-panel overflow-hidden">
-            <div className="flex flex-col gap-1 border-b border-sky-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex flex-col gap-1 border-b border-slate-200 bg-slate-50/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="text-sm font-semibold">
                 {orders.length > 0
                   ? `共找到 ${orders.length} 笔订单`
@@ -461,7 +461,7 @@ export default function QueryOrderPage() {
                 <div className="hidden overflow-x-auto md:block">
                   <table className="w-full min-w-[720px] text-sm">
                     <thead>
-                      <tr className="border-b border-sky-100 bg-sky-50 text-xs text-slate-500">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
                         <th className="px-4 py-2.5 text-left font-semibold">订单号</th>
                         <th className="px-4 py-2.5 text-left font-semibold">商品名称</th>
                         <th className="px-4 py-2.5 text-center font-semibold">数量</th>

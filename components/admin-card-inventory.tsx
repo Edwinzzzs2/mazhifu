@@ -185,7 +185,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
 
   return (
     <section className="admin-panel min-w-0">
-      <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
             <PackageCheck className="h-4 w-4" />
@@ -255,7 +255,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
             />
           </label>
 
-          <label className="flex items-center gap-3 rounded-md border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold">
+          <label className="flex items-center gap-3 rounded-md border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold text-slate-700">
             <input
               type="checkbox"
               checked={deduplicate}
@@ -280,7 +280,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
               type="button"
               onClick={importSecrets}
               disabled={submitting || !productId}
-              className="bg-emerald-500 shadow-none hover:bg-emerald-600"
+              className="bg-emerald-600 shadow-none hover:bg-emerald-700"
             >
               <Upload className="h-4 w-4" />
               {submitting ? "导入中" : "导入库存"}
@@ -302,8 +302,11 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
             <StatCard label="已售" value={stats.used} accent="text-slate-700" />
           </div>
 
-          <div className="flex flex-col gap-3 rounded-md border border-sky-100 bg-sky-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold">库存明细</div>
+          <div className="admin-panel-muted flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-bold text-slate-800">库存明细</div>
+              <div className="mt-0.5 text-xs text-slate-500">按状态筛选当前商品卡密</div>
+            </div>
             <select
               className="admin-input bg-white sm:max-w-44"
               value={status}
@@ -328,16 +331,16 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                 />
               ))
             ) : (
-              <div className="rounded-md border border-sky-100 bg-white px-4 py-10 text-center text-sm text-slate-500">
+              <div className="rounded-md border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
                 {loading ? "正在读取库存" : "暂无卡密"}
               </div>
             )}
           </div>
 
-          <div className="hidden overflow-hidden rounded-md border border-sky-100 lg:block">
+          <div className="table-shell hidden lg:block">
             <div className="touch-scroll max-h-[520px] overflow-auto">
               <table className="w-full min-w-[760px] border-collapse bg-white text-sm">
-                <thead className="sticky top-0 bg-sky-50 text-left text-xs uppercase text-slate-500">
+                <thead className="sticky top-0 bg-slate-50 text-left text-xs text-slate-500">
                   <tr>
                     <th className="px-4 py-3">ID</th>
                     <th className="px-4 py-3">卡密</th>
@@ -347,7 +350,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                     <th className="px-4 py-3 text-right">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-sky-50">
+                <tbody className="divide-y divide-slate-100">
                   {cardSecrets.length ? (
                     cardSecrets.map((secret) => (
                       <tr key={secret.id} className="hover:bg-sky-50/60">
@@ -418,7 +421,7 @@ function SecretCard({
   onDelete: () => Promise<void>;
 }) {
   return (
-    <article className="rounded-md border border-sky-100 bg-white p-3 shadow-sm">
+    <article className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="break-all font-mono text-xs text-slate-400">{secret.id}</div>
@@ -473,7 +476,7 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-md border border-sky-100 bg-white p-4">
+    <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-xs text-slate-500">{label}</div>
       <div className={"mt-1 text-2xl font-bold " + accent}>{value}</div>
     </div>

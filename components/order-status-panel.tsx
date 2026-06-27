@@ -89,7 +89,7 @@ export function OrderStatusPanel({
   return (
     <div className={compact ? "space-y-3" : "space-y-5"}>
       <div
-        className={`rounded-md border p-5 text-center ${
+        className={`rounded-md border p-5 text-center shadow-sm ${
           paid
             ? "border-emerald-200 bg-emerald-50"
             : expired
@@ -115,7 +115,7 @@ export function OrderStatusPanel({
       </div>
 
       {!compact ? (
-        <dl className="grid gap-3 text-sm">
+        <dl className="grid gap-3 rounded-md border border-slate-200 bg-white p-4 text-sm shadow-sm">
           <OrderLine label="商品名称" value={order.product_name} />
           <OrderLine label="实付金额" value={`¥${order.money}`} accent />
           <OrderLine label="订单编号" value={order.out_trade_no} />
@@ -154,7 +154,7 @@ export function OrderStatusPanel({
         type="button"
         onClick={refreshStatus}
         disabled={refreshing}
-        className="flex w-full items-center justify-center gap-2 rounded-md border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-sky-50 disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-60"
       >
         <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
         立即刷新状态
@@ -178,7 +178,7 @@ function OrderLine({
   accent?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
+    <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
       <dt className="text-slate-500">{label}</dt>
       <dd className={`break-all text-right font-semibold ${accent ? "text-sky-500" : ""}`}>
         {value}

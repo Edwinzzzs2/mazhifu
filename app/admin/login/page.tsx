@@ -30,14 +30,25 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
   const error = searchParams?.error;
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50 px-3 py-6 text-[#162238] sm:px-4">
+    <main className="page-shell grid place-items-center px-3 py-6 sm:px-4">
       <section className="admin-panel w-full max-w-md p-5 sm:p-6">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-bold text-sky-600">后台登录</div>
-            <h1 className="mt-1 truncate text-xl font-bold sm:text-2xl">{siteSettings.site_name}管理台</h1>
+            <h1 className="mt-1 truncate text-2xl font-black text-slate-950">
+              {siteSettings.site_name}管理台
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              输入管理密码后进入商品、库存和订单工作台。
+            </p>
           </div>
-          <LockKeyhole className="h-10 w-10 shrink-0 text-sky-500" />
+          <span className="brand-mark h-11 w-11 shrink-0">
+            {siteSettings.site_logo_url ? (
+              <img src={siteSettings.site_logo_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <LockKeyhole className="h-5 w-5" />
+            )}
+          </span>
         </div>
 
         {!configured ? (
@@ -61,7 +72,7 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
                 {error === "config" ? "后台密码未配置" : "密码不正确"}
               </div>
             ) : null}
-            <Button className="bg-sky-500 shadow-none hover:bg-sky-600">
+            <Button className="bg-sky-600 shadow-none hover:bg-sky-700">
               <ShieldCheck className="h-4 w-4" />
               登录
             </Button>

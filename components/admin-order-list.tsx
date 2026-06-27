@@ -74,7 +74,7 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
   }
 
   return (
-    <div className="grid gap-5 border-t border-sky-100 bg-sky-50/40 px-4 py-4 sm:px-6 sm:py-5 md:grid-cols-2">
+    <div className="grid gap-5 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-6 sm:py-5 md:grid-cols-2">
       {/* 左：订单信息 */}
       <div className="space-y-3 text-sm">
         <div className="font-semibold text-slate-700">订单信息</div>
@@ -129,7 +129,7 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
             {detail.delivery_secrets.map((secret, i) => (
               <li
                 key={i}
-                className="flex items-center justify-between gap-2 rounded-md border border-sky-100 bg-white px-3 py-2 font-mono text-xs"
+                className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs"
               >
                 <span className="break-all">{secret}</span>
                 <button
@@ -246,7 +246,7 @@ export function AdminOrderList() {
   return (
     <section className="admin-panel min-w-0">
       {/* 标题栏 */}
-      <div className="flex flex-col gap-4 border-b border-sky-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
             <ClipboardList className="h-4 w-4" />
@@ -272,7 +272,7 @@ export function AdminOrderList() {
       </div>
 
       {/* 筛选栏 */}
-      <div className="flex flex-col gap-3 border-b border-sky-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/45 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
         {/* 状态筛选 */}
         <div className="flex flex-wrap gap-2 text-sm">
           {[
@@ -286,8 +286,8 @@ export function AdminOrderList() {
               onClick={() => handleStatusChange(item.value)}
               className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                 status === item.value
-                  ? "border-sky-500 bg-sky-500 text-white"
-                  : "border-sky-200 bg-white text-slate-600 hover:border-sky-400"
+                  ? "border-sky-600 bg-sky-600 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:bg-sky-50"
               }`}
             >
               {item.label}
@@ -312,7 +312,7 @@ export function AdminOrderList() {
       {/* 订单列表 */}
       <div className="overflow-hidden">
         {/* 手机卡片视图 */}
-        <div className="divide-y divide-sky-50 md:hidden">
+        <div className="divide-y divide-slate-100 md:hidden">
           {orders.length === 0 ? (
             <div className="px-4 py-10 text-center text-slate-400">
               {loading ? "正在加载…" : "暂无订单"}
@@ -373,7 +373,7 @@ export function AdminOrderList() {
         {/* PC 表格视图 */}
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[860px] border-collapse bg-white text-sm">
-            <thead className="bg-sky-50 text-left text-xs uppercase text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
                 <th className="px-4 py-3 w-8" />
                 <th className="px-4 py-3">订单号</th>
@@ -387,7 +387,7 @@ export function AdminOrderList() {
                 <th className="px-4 py-3">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-sky-50">
+            <tbody className="divide-y divide-slate-100">
               {orders.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
@@ -456,7 +456,7 @@ export function AdminOrderList() {
 
       {/* 分页 */}
       {totalPages > 1 && (
-        <div className="flex flex-col gap-3 border-t border-sky-100 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/45 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <span className="text-slate-400 text-xs">
             第 {page} / {totalPages} 页，共 {total} 笔
           </span>

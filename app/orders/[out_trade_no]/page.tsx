@@ -33,9 +33,9 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
     encodeURIComponent(accessToken);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-3 py-5 text-[#162238] sm:px-4 sm:py-8">
+    <main className="page-shell px-3 py-5 sm:px-4 sm:py-8">
       <section className="admin-panel mx-auto w-full max-w-4xl overflow-hidden">
-        <div className="flex items-start justify-between gap-4 border-b border-sky-100 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
           <div className="min-w-0">
             <Badge className={paid ? "bg-emerald-500" : "bg-sky-500"}>
               {paid ? "支付成功" : "订单追踪"}
@@ -52,14 +52,14 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
 
         <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
           <div className="space-y-5">
-            <div className="rounded-md bg-sky-50 p-5">
+            <div className="admin-panel-muted p-5">
               <div className="text-sm text-slate-500">实付金额</div>
               <div className="mt-2 text-4xl font-bold text-sky-500 sm:text-5xl">
                 ¥{Number(order.money).toFixed(2)}
               </div>
             </div>
 
-            <dl className="grid gap-3 rounded-md border border-sky-100 p-5 text-sm">
+            <dl className="grid gap-3 rounded-md border border-slate-200 bg-white p-5 text-sm shadow-sm">
               <OrderLine label="商品名称" value={order.product_name} />
               <OrderLine label="购买数量" value={order.quantity + " 件"} />
               <OrderLine label="支付方式" value={order.pay_type === "wxpay" ? "微信支付" : "支付宝"} />
@@ -69,7 +69,7 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
             </dl>
 
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild className="flex-1 bg-sky-500 shadow-none hover:bg-sky-600">
+              <Button asChild className="flex-1 bg-sky-600 shadow-none hover:bg-sky-700">
                 <Link href="/">
                   <Home className="h-4 w-4" />
                   返回商品
@@ -86,7 +86,7 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
             </div>
           </div>
 
-          <aside className="rounded-md border border-sky-100 bg-white p-4">
+          <aside className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-sm font-bold">
               <ReceiptText className="h-4 w-4 text-sky-500" />
               订单状态

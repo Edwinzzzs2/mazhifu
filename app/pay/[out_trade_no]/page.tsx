@@ -55,7 +55,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
     encodeURIComponent(accessToken);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-3 py-5 text-[#162238] sm:px-4 sm:py-8">
+    <main className="page-shell px-3 py-5 sm:px-4 sm:py-8">
       <section className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[0.85fr_1.15fr] lg:gap-5">
         <aside className="admin-panel p-4 sm:p-6">
           <div className="mb-6 flex items-center justify-between gap-3">
@@ -63,7 +63,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
             <ReceiptText className="h-9 w-9 text-sky-500" />
           </div>
 
-          <div className="rounded-md bg-sky-50 p-5">
+          <div className="admin-panel-muted p-5">
             <div className="text-sm text-slate-500">支付金额</div>
             <div className="mt-2 text-4xl font-bold tracking-normal text-rose-500 sm:text-6xl">
               ¥{Number(order.money).toFixed(2)}
@@ -78,7 +78,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
             <OrderField label="创建时间" value={new Date(order.created_at).toLocaleString("zh-CN")} />
           </dl>
 
-          <div className="mt-6 rounded-md border border-sky-100 bg-sky-50/70 p-4 text-sm leading-7 text-slate-600">
+          <div className="mt-6 rounded-md border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-600 shadow-sm">
             <div className="mb-1 flex items-center gap-2 font-bold text-slate-800">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               安全提示
@@ -107,7 +107,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-5">
-            <div className="rounded-md border border-sky-100 bg-sky-50 p-4 text-center sm:p-6">
+            <div className="admin-panel-muted p-4 text-center sm:p-6">
               <CreditCard className="mx-auto h-12 w-12 text-sky-500 sm:h-16 sm:w-16" strokeWidth={1.4} />
               <h2 className="mt-4 text-xl font-bold">准备支付</h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
@@ -120,7 +120,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
                     {configError}
                   </div>
                 ) : (
-                  <Button asChild size="lg" className="w-full bg-sky-500 shadow-none hover:bg-sky-600">
+                  <Button asChild size="lg" className="w-full bg-sky-600 shadow-none hover:bg-sky-700">
                     <a href={paymentUrl}>
                       <CreditCard className="h-4 w-4" />
                       立即支付
@@ -134,7 +134,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
               </div>
             </div>
 
-            <div className="rounded-md border border-sky-100 bg-white p-4">
+            <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold">
                 <Timer className="h-4 w-4 text-sky-500" />
                 状态追踪

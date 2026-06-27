@@ -24,12 +24,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CategoryRecord, ProductRecord } from "@/lib/products";
+import type { SiteSettings } from "@/lib/site-settings";
 
 /* ─── Types ──────────────────────────────────────────────── */
 
 type StorefrontProps = {
   categories: CategoryRecord[];
   products: ProductRecord[];
+  site_settings: SiteSettings;
   checkout_failed: boolean;
 };
 
@@ -59,7 +61,12 @@ type ViewMode = "card" | "table";
 
 /* ─── Main component ─────────────────────────────────────── */
 
-export function Storefront({ categories, products, checkout_failed }: StorefrontProps) {
+export function Storefront({
+  categories,
+  products,
+  site_settings,
+  checkout_failed,
+}: StorefrontProps) {
   const [categoryId, setCategoryId] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("card");
   const [searchTerm, setSearchTerm] = useState("");
@@ -94,6 +101,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
         return searchText.includes(normalizedSearch);
       })
     : categoryProducts;
+  const noticeItems = site_settings.notice_items;
 
   function openProduct(product: ProductRecord) {
     setSelectedProduct(product);
@@ -157,15 +165,23 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-[#162238]">
+    <div className="page-shell">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:h-16 md:px-6">
-          <a href="/" className="flex items-center gap-2 font-bold">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white md:h-9 md:w-9">
-              <ShoppingBag className="h-4 w-4 md:h-5 md:w-5" />
+          <a href="/" className="flex min-w-0 items-center gap-2.5 font-bold">
+            <span className="brand-mark h-8 w-8 md:h-9 md:w-9">
+              {site_settings.site_logo_url ? (
+                <img
+                  src={site_settings.site_logo_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <ShoppingBag className="h-4 w-4 md:h-5 md:w-5" />
+              )}
             </span>
-            <span className="text-lg md:text-xl">码付小铺</span>
+            <span className="truncate text-lg md:text-xl">{site_settings.site_name}</span>
           </a>
           <nav className="flex items-center gap-1">
             <Button asChild variant="ghost" size="sm">
@@ -185,30 +201,48 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
       </header>
 
       <main>
-        {/* ── Notice ── */}
-        <section className="border-b border-slate-200 bg-sky-50">
-          <div className="mx-auto max-w-7xl px-4 py-7 md:px-6">
-            <div className="mb-4 flex items-center gap-2 font-bold">
-              <ShieldCheck className="h-5 w-5 text-sky-500" />
-              购买须知
+        {/* ── Hero ── */}
+        <section className="border-b border-slate-200/80">
+          <div className="mx-auto max-w-7xl px-4 py-7 md:px-6 md:py-10">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                服务端验签，自动发货
+              </div>
+              <h1 className="mt-4 text-3xl font-black leading-tight tracking-normal text-slate-950 sm:text-4xl lg:text-5xl">
+                {site_settings.site_name}
+              </h1>
+              <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">
+                {site_settings.site_description}
+              </p>
+              {site_settings.announcement ? (
+                <div className="soft-banner mt-5 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
+                  {site_settings.announcement}
+                </div>
+              ) : null}
             </div>
+          </div>
+        </section>
+
+        {/* ── Notice ── */}
+        <section className="border-b border-slate-200/80 bg-white/50">
+          <div className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-6">
             {checkout_failed && (
               <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 下单失败，请检查数据库、商品库存或支付配置。
               </div>
             )}
+            <div className="mb-3 flex items-center gap-2 font-bold">
+              <ShieldCheck className="h-5 w-5 text-sky-500" />
+              购买须知
+            </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {[
-                "本站商品用于合法业务测试，请按商品说明购买。",
-                "支付状态由服务端验签确认，页面跳转不代表到账。",
-                "订单有效期内完成支付，超时后请重新下单。",
-                "遇到问题请保留订单号，切勿泄露订单访问链接。",
-              ].map((notice, index) => (
+              {noticeItems.map((notice, index) => (
                 <div
                   key={notice}
-                  className="flex min-h-20 gap-3 rounded-md border border-sky-100 bg-white p-4 text-sm leading-6"
+                  className="flex min-h-20 gap-3 rounded-md border border-slate-200 bg-white/95 p-4 text-sm leading-6 shadow-sm"
                 >
-                  <span className="font-bold text-sky-500">0{index + 1}</span>
+                  <span className="font-bold text-sky-600">0{index + 1}</span>
                   <span>{notice}</span>
                 </div>
               ))}
@@ -217,18 +251,19 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
         </section>
 
         {/* ── Products ── */}
-        <section className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 font-bold">
-              <PackageCheck className="h-5 w-5 text-sky-500" />
-              商品分组
+        <section className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
+                <PackageCheck className="h-4 w-4" />
+                商品目录
+              </div>
+              <h2 className="mt-1 truncate text-2xl font-black text-slate-950">
+                {currentCategoryName}
+              </h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-1.5 text-sm">
-                <Grid2X2 className="h-4 w-4 text-sky-500" />
-                {filteredProducts.length} 件
-              </div>
-              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-sky-100 bg-white p-1 text-sm font-semibold shadow-sm">
+              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-sm font-semibold shadow-sm">
                 <button
                   type="button"
                   onClick={() => {
@@ -237,8 +272,8 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                   }}
                   className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
                     viewMode === "card"
-                      ? "bg-sky-500 text-white"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                      ? "bg-sky-600 text-white"
+                      : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
                   }`}
                 >
                   <Grid2X2 className="h-4 w-4" />
@@ -249,8 +284,8 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                   onClick={() => setViewMode("table")}
                   className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
                     viewMode === "table"
-                      ? "bg-sky-500 text-white"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                      ? "bg-sky-600 text-white"
+                      : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
                   }`}
                 >
                   <List className="h-4 w-4" />
@@ -269,8 +304,8 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                 <button
                   className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
                     categoryId === "all"
-                      ? "border-sky-500 bg-sky-500 text-white"
-                      : "border-sky-200 bg-white text-slate-600"
+                      ? "border-sky-600 bg-sky-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600"
                   }`}
                   onClick={() => setCategoryId("all")}
                 >
@@ -286,8 +321,8 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                       key={category.id}
                       className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
                         categoryId === category.id
-                          ? "border-sky-500 bg-sky-500 text-white"
-                          : "border-sky-200 bg-white text-slate-600"
+                          ? "border-sky-600 bg-sky-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600"
                       }`}
                       onClick={() => setCategoryId(category.id)}
                     >
@@ -300,7 +335,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                 })}
               </div>
               {/* PC 竖排 */}
-              <div className="hidden rounded-md border border-sky-100 bg-white p-2 lg:block">
+              <div className="admin-panel hidden p-2 lg:block">
                 <button
                   className={`category-button ${categoryId === "all" ? "is-active" : ""}`}
                   onClick={() => setCategoryId("all")}
@@ -327,15 +362,25 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
             </aside>
 
             {viewMode === "card" ? (
-              <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onOpen={() => openProduct(product)}
-                  />
-                ))}
-              </div>
+              filteredProducts.length ? (
+                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+                  {filteredProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onOpen={() => openProduct(product)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="admin-panel grid min-h-64 place-items-center px-4 py-12 text-center">
+                  <div>
+                    <ShoppingBag className="mx-auto h-10 w-10 text-sky-400" />
+                    <div className="mt-3 text-base font-bold text-slate-800">暂无匹配商品</div>
+                    <div className="mt-1 text-sm text-slate-500">请切换分类或清空搜索关键词</div>
+                  </div>
+                </div>
+              )
             ) : (
               <ProductTable
                 categoryName={currentCategoryName}
@@ -366,7 +411,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
             {/* Drawer header */}
             <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
               <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-sky-500">商品详情</div>
+                <div className="text-xs font-semibold text-sky-600">商品详情</div>
                 <h2 className="mt-0.5 line-clamp-1 text-sm font-bold sm:text-base">{selectedProduct.name}</h2>
               </div>
               <button
@@ -504,7 +549,15 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                           className={`payment-choice ${payType === value ? "is-active" : ""}`}
                           onClick={() => setPayType(value)}
                         >
-                          <span className="text-sm">{label === "支付宝" ? "🔵" : "🟢"}</span>
+                          <span
+                            className={`grid h-6 w-6 place-items-center rounded-md text-xs font-bold ${
+                              value === "wxpay"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-sky-50 text-sky-700"
+                            }`}
+                          >
+                            {label.slice(0, 1)}
+                          </span>
                           {label}
                           {payType === value && <Check className="ml-auto h-4 w-4" />}
                         </button>
@@ -603,20 +656,22 @@ function ProductCard({
             <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-12 sm:w-12" strokeWidth={1.4} />
           </div>
         )}
-        {product.badge && (
-          <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-[11px] font-bold text-white sm:left-3 sm:top-3">
-            {product.badge}
-          </span>
-        )}
       </div>
       <div className="p-3">
-        <h2 className="line-clamp-2 min-h-9 text-[13px] font-bold leading-[18px] text-slate-950 sm:min-h-10 sm:text-[15px] sm:leading-5">
-          {product.name}
-        </h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="line-clamp-2 min-h-9 text-[13px] font-bold leading-[18px] text-slate-950 sm:min-h-10 sm:text-[15px] sm:leading-5">
+            {product.name}
+          </h2>
+          {product.badge ? (
+            <span className="shrink-0 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600">
+              {product.badge}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-[13px]">
           {product.subtitle || product.description}
         </p>
-        <div className="mt-3 flex items-end justify-between border-t border-dashed border-slate-100 pt-2.5">
+        <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-2.5">
           <div>
             <span className="text-xs text-sky-500">¥</span>
             <span className="text-xl font-bold text-sky-500">
@@ -625,9 +680,8 @@ function ProductCard({
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
         </div>
-        <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-[12px] text-slate-500">
-          <span className="py-1.5">库存 {product.stock}</span>
-          <span className="border-l border-slate-100 py-1.5">已售 {product.sold_count}</span>
+        <div className="mt-2 rounded border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[12px] font-semibold text-slate-500">
+          库存 {product.stock}
         </div>
       </div>
     </button>
@@ -651,7 +705,7 @@ function ProductTable({
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.055)]">
       <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-normal text-slate-400">Catalog</div>
+          <div className="text-xs font-semibold text-slate-500">商品列表</div>
           <h2 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">
             {categoryName}
           </h2>
@@ -837,7 +891,7 @@ function OrderTrackingModal({
         {/* Modal header */}
         <div className="flex items-start justify-between border-b border-sky-100 px-5 py-4">
           <div>
-            <div className="text-xs font-bold uppercase tracking-wide text-sky-600">
+            <div className="text-xs font-semibold text-sky-600">
               订单状态追踪
             </div>
             <div className="mt-0.5 font-mono text-xs text-slate-400">{info.out_trade_no}</div>
@@ -921,7 +975,9 @@ function OrderTrackingModal({
                         : "border-sky-400 bg-sky-500 text-white hover:bg-sky-600"
                     }`}
                   >
-                    <span>{info.pay_type === "wxpay" ? "🟢" : "🔵"}</span>
+                    <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-xs">
+                      {info.pay_type === "wxpay" ? "微信" : "支付宝"}
+                    </span>
                     {info.pay_type === "wxpay" ? "微信支付" : "支付宝支付"}
                     <span className="ml-1 rounded-full bg-white/25 px-2 py-0.5 text-xs">
                       点击打开付款

@@ -85,7 +85,7 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       <section className="admin-panel min-w-0">
-        <div className="flex flex-col gap-3 border-b border-sky-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
               <Settings2 className="h-4 w-4" />
@@ -93,7 +93,7 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
             </div>
             <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">{settings.site_name || "未命名站点"}</h2>
           </div>
-          <Button onClick={saveSettings} disabled={saving} className="w-full bg-emerald-500 shadow-none hover:bg-emerald-600 sm:w-auto">
+          <Button onClick={saveSettings} disabled={saving} className="w-full bg-emerald-600 shadow-none hover:bg-emerald-700 sm:w-auto">
             <Save className="h-4 w-4" />
             {saving ? "保存中" : "保存设置"}
           </Button>
@@ -213,16 +213,16 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
             <Store className="h-4 w-4 text-sky-500" />
             前台品牌预览
           </div>
-          <div className="rounded-md border border-sky-100 bg-sky-50 p-4">
+          <div className="admin-panel-muted p-4">
             <div className="flex items-center gap-2 font-bold">
-              <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-md bg-sky-500 text-white">
+              <span className="brand-mark h-10 w-10">
                 {settings.site_logo_url ? (
                   <img src={settings.site_logo_url} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <ShoppingBag className="h-5 w-5" />
                 )}
               </span>
-              <span className="text-xl">{settings.site_name || "站点名称"}</span>
+              <span className="min-w-0 truncate text-xl text-slate-950">{settings.site_name || "站点名称"}</span>
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-600">{settings.site_description}</p>
             {settings.announcement ? (
@@ -240,8 +240,8 @@ export function AdminSiteSettings({ initial_settings }: AdminSiteSettingsProps) 
           </div>
           <div className="grid gap-2">
             {previewNotices.map((notice, index) => (
-              <div key={`${notice}-${index}`} className="flex gap-3 rounded-md border border-sky-100 bg-sky-50 p-3 text-sm leading-6">
-                <span className="font-bold text-sky-500">0{index + 1}</span>
+              <div key={`${notice}-${index}`} className="flex gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm leading-6 shadow-sm">
+                <span className="font-bold text-sky-600">0{index + 1}</span>
                 <span>{notice}</span>
               </div>
             ))}
