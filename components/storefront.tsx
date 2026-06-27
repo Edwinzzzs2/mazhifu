@@ -354,20 +354,20 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm"
+            className="product-drawer-backdrop fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-sm"
             onClick={closeDrawer}
           />
           {/* Drawer panel:
                手机端：从底部弹出，圆角，最高 92vh
                PC端：从右侧滑入，最宽 4xl */}
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92vh] flex-col rounded-t-lg bg-white shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:w-full sm:max-w-4xl sm:rounded-none">
+          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:bottom-auto sm:h-auto sm:w-full sm:max-w-4xl sm:rounded-none sm:pb-0">
             {/* 手机拖拽把手 */}
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
             <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide text-sky-500">商品详情</div>
-                <h2 className="mt-0.5 line-clamp-1 text-base font-bold sm:text-lg">{selectedProduct.name}</h2>
+                <h2 className="mt-0.5 line-clamp-1 text-sm font-bold sm:text-base">{selectedProduct.name}</h2>
               </div>
               <button
                 onClick={closeDrawer}
@@ -446,7 +446,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                       </div>
                     )}
                     <div className="min-w-0">
-                      <div className="line-clamp-1 font-bold">{selectedProduct.name}</div>
+                      <div className="line-clamp-1 text-sm font-bold">{selectedProduct.name}</div>
                       <div className="mt-1 text-xs text-slate-500">
                         库存 {selectedProduct.stock} 件 · ¥{Number(selectedProduct.price).toFixed(2)}/件
                       </div>
@@ -557,7 +557,7 @@ export function Storefront({ categories, products, checkout_failed }: Storefront
                     type="submit"
                     size="lg"
                     disabled={selectedProduct.stock < 1 || checkingOut}
-                    className="h-12 w-full bg-emerald-500 text-base shadow-none hover:bg-emerald-600"
+                    className="h-11 w-full bg-emerald-500 text-sm shadow-none hover:bg-emerald-600"
                   >
                     {checkingOut ? "正在下单…" : "立即下单"}
                   </Button>
@@ -600,32 +600,32 @@ function ProductCard({
           />
         ) : (
           <div className="grid h-full place-items-center bg-[linear-gradient(135deg,#effaff,#dff4ff)]">
-            <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-16 sm:w-16" strokeWidth={1.4} />
+            <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-12 sm:w-12" strokeWidth={1.4} />
           </div>
         )}
         {product.badge && (
-          <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-xs font-bold text-white sm:left-3 sm:top-3">
+          <span className="absolute left-2 top-2 rounded bg-rose-500 px-1.5 py-0.5 text-[11px] font-bold text-white sm:left-3 sm:top-3">
             {product.badge}
           </span>
         )}
       </div>
-      <div className="p-3 sm:p-4">
-        <h2 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 sm:min-h-12 sm:text-base sm:leading-6">
+      <div className="p-3">
+        <h2 className="line-clamp-2 min-h-9 text-[13px] font-bold leading-[18px] text-slate-950 sm:min-h-10 sm:text-[15px] sm:leading-5">
           {product.name}
         </h2>
-        <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-sm">
+        <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-[13px]">
           {product.subtitle || product.description}
         </p>
-        <div className="mt-3 flex items-end justify-between border-t border-dashed border-sky-100 pt-2 sm:mt-4 sm:pt-3">
+        <div className="mt-3 flex items-end justify-between border-t border-dashed border-slate-100 pt-2.5">
           <div>
-            <span className="text-xs text-sky-500 sm:text-sm">¥</span>
-            <span className="text-lg font-bold text-sky-500 sm:text-2xl">
+            <span className="text-xs text-sky-500">¥</span>
+            <span className="text-xl font-bold text-sky-500">
               {Number(product.price).toFixed(2)}
             </span>
           </div>
-          <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1 sm:h-5 sm:w-5" />
+          <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
         </div>
-        <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-xs text-slate-500 sm:mt-3">
+        <div className="mt-2 grid grid-cols-2 overflow-hidden rounded border border-slate-100 bg-slate-50 text-center text-[12px] text-slate-500">
           <span className="py-1.5">库存 {product.stock}</span>
           <span className="border-l border-slate-100 py-1.5">已售 {product.sold_count}</span>
         </div>
@@ -648,18 +648,18 @@ function ProductTable({
   onOpen: (product: ProductRecord) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-      <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.055)]">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-xs font-bold uppercase tracking-normal text-slate-400">Catalog</div>
-          <h2 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">
+          <div className="text-[11px] font-bold uppercase tracking-normal text-slate-400">Catalog</div>
+          <h2 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">
             {categoryName}
           </h2>
         </div>
         <label className="relative w-full lg:max-w-sm">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
-            className="h-11 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+            className="h-10 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="搜索商品关键词"
@@ -668,7 +668,7 @@ function ProductTable({
       </div>
 
       <div className="p-3 sm:p-4">
-        <div className="hidden rounded-t-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_110px_90px_128px]">
+        <div className="hidden rounded-t-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_96px_80px_112px]">
           <div>商品</div>
           <div className="text-center">价格</div>
           <div className="text-center">库存</div>
@@ -681,35 +681,35 @@ function ProductTable({
               {products.map((product) => (
                 <article
                   key={product.id}
-                  className="grid gap-3 bg-white px-3 py-4 transition hover:bg-slate-50 sm:px-4 md:grid-cols-[minmax(0,1fr)_110px_90px_128px] md:items-center"
+                  className="grid gap-3 bg-white px-3 py-3.5 transition hover:bg-slate-50 sm:px-4 md:grid-cols-[minmax(0,1fr)_96px_80px_112px] md:items-center"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-sky-50 text-sky-500 ring-1 ring-sky-100">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-sky-50 text-sky-500 ring-1 ring-sky-100">
                       {product.image_url ? (
                         <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
                       ) : (
-                        <ShoppingBag className="h-7 w-7" strokeWidth={1.6} />
+                        <ShoppingBag className="h-6 w-6" strokeWidth={1.6} />
                       )}
                     </div>
                     <div className="min-w-0">
                       <button
                         type="button"
                         onClick={() => onOpen(product)}
-                        className="line-clamp-2 text-left text-base font-bold leading-5 text-slate-950 hover:text-sky-600"
+                        className="line-clamp-2 text-left text-[15px] font-bold leading-5 text-slate-950 hover:text-sky-600"
                       >
                         {product.name}
                       </button>
-                      <p className="mt-1 line-clamp-1 text-sm text-slate-500">
+                      <p className="mt-1 line-clamp-1 text-[13px] text-slate-500">
                         {product.subtitle || product.description || "自动发货商品"}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {product.stock > 0 ? (
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                             自动发货
                           </span>
                         ) : null}
                         {product.badge ? (
-                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700">
                             {product.badge}
                           </span>
                         ) : null}
@@ -719,7 +719,7 @@ function ProductTable({
 
                   <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
                     <span className="text-xs font-semibold text-slate-400 md:hidden">价格</span>
-                    <span className="text-lg font-bold text-slate-950">¥{Number(product.price).toFixed(2)}</span>
+                    <span className="text-base font-bold text-slate-950">¥{Number(product.price).toFixed(2)}</span>
                   </div>
 
                   <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
@@ -731,7 +731,7 @@ function ProductTable({
                     type="button"
                     onClick={() => onOpen(product)}
                     disabled={product.stock < 1}
-                    className="h-11 w-full bg-slate-950 shadow-none hover:bg-sky-600 md:ml-auto md:w-28"
+                    className="h-10 w-full bg-slate-950 text-sm shadow-none hover:bg-sky-600 md:ml-auto md:w-24"
                   >
                     <ShoppingBag className="h-4 w-4" />
                     购买
