@@ -4,7 +4,6 @@ import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
 import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
 import type { ProductRecord } from "@/lib/products";
-import { expireOrderIfNeeded } from "@/lib/order-expiration";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
 export type OrderStatus = "pending" | "paid" | "expired" | "cancelled";
@@ -185,7 +184,6 @@ export async function createOrder(
 
 export async function getOrderByOutTradeNo(outTradeNo: string) {
   await ensureStoreSchema();
-  await expireOrderIfNeeded(outTradeNo);
   const result = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",
     [outTradeNo],
@@ -225,7 +223,6 @@ export async function getOrderViewByEmail(outTradeNo: string, email: string) {
   // 用邮箱与下单时的 contact 做大小写不敏感匹配
   if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
 
-  await expireOrderIfNeeded(outTradeNo);
   const refreshed = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",
     [outTradeNo],
@@ -259,8 +256,6 @@ export async function getOrderViewByQueryAuth(
 
   const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
   if (!order.query_password_hash || order.query_password_hash !== inputHash) return null;
-
-  await expireOrderIfNeeded(outTradeNo);
 
   const refreshed = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",
@@ -663,7 +658,6 @@ export type AdminOrderDetail = OrderRecord & {
 
 export async function getOrderDetailForAdmin(outTradeNo: string): Promise<AdminOrderDetail | null> {
   await ensureStoreSchema();
-  await expireOrderIfNeeded(outTradeNo);
 
   const result = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",

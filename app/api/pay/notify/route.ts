@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { markOrderFromPayment, markOrderFromQuery } from "@/lib/orders";
+import { markOrderFromPayment, markOrderFromQuery, retryOrderFulfillment } from "@/lib/orders";
 import {
   MAPAY_QUERY_TIMEOUT_MS,
   isAbortError,
@@ -9,38 +9,17 @@ import {
   verifyMapayPayload,
 } from "@/lib/mapay";
 
-/** 支付确认后，将发货任务投入 BullMQ 队列异步处理 */
-async function enqueueFulfill(outTradeNo: string) {
+/** 支付确认后直接同步发货；失败不阻塞回调响应，前端轮询会兜底重试 */
+async function fulfillOrder(outTradeNo: string) {
   try {
-    const { orderFulfillQueue } = await import("@/lib/queue");
-    await orderFulfillQueue.add(
-      "fulfill",
-      { out_trade_no: outTradeNo },
-      { jobId: `fulfill:${outTradeNo}` }, // 防止重复投递
-    );
-    console.log("[mapay:notify] fulfill job enqueued", {
-      out_trade_no: outTradeNo,
-      job_id: `fulfill:${outTradeNo}`,
-    });
+    const delivered = await retryOrderFulfillment(outTradeNo);
+    console.log("[mapay:notify] fulfill result", { out_trade_no: outTradeNo, delivered });
   } catch (err) {
-    console.error("[mapay:notify] fulfill job enqueue failed; trying sync fallback", {
+    // 发货失败不影响回调返回 success，前端 status 接口轮询时会重试
+    console.error("[mapay:notify] fulfill failed (will retry on next poll)", {
       out_trade_no: outTradeNo,
       error: err,
     });
-    // 队列不可用时同步发货兜底
-    const { retryOrderFulfillment } = await import("@/lib/orders");
-    try {
-      const delivered = await retryOrderFulfillment(outTradeNo);
-      console.log("[mapay:notify] sync fulfill fallback result", {
-        out_trade_no: outTradeNo,
-        delivered,
-      });
-    } catch (fulfillErr) {
-      console.error("[mapay:notify] sync fulfill fallback failed", {
-        out_trade_no: outTradeNo,
-        error: fulfillErr,
-      });
-    }
   }
 }
 
@@ -118,7 +97,7 @@ async function handleNotify(request: Request) {
         payload,
       });
       if (updated) {
-        await enqueueFulfill(outTradeNo);
+        await fulfillOrder(outTradeNo)
       }
       return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
     }
@@ -156,13 +135,13 @@ async function handleNotify(request: Request) {
       payload,
     });
     if (updated) {
-      await enqueueFulfill(outTradeNo);
+      await fulfillOrder(outTradeNo)
     }
     return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
   }
 
-  // ④ 回查确认支付成功，异步入队发货
-  await enqueueFulfill(outTradeNo);
+  // ④ 回查确认支付成功，同步发货
+  await fulfillOrder(outTradeNo)
 
   return new NextResponse("success", { status: 200 });
 }

@@ -1,51 +1,10 @@
 import { getPool } from "@/lib/db";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
-export async function expirePendingOrders(limit = 200) {
-  await ensureStoreSchema();
-
-  const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
-  const result = await getPool().query<{ expired_count: string }>(
-    `
-      WITH due AS (
-        SELECT out_trade_no
-        FROM orders
-        WHERE status = 'pending'
-          AND paid_at IS NULL
-          AND expires_at IS NOT NULL
-          AND expires_at <= NOW()
-        ORDER BY expires_at ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT $1
-      ),
-      expired AS (
-        UPDATE orders
-        SET status = 'expired'
-        FROM due
-        WHERE orders.out_trade_no = due.out_trade_no
-          AND orders.status = 'pending'
-          AND orders.paid_at IS NULL
-        RETURNING orders.out_trade_no
-      ),
-      released AS (
-        UPDATE card_secrets
-        SET status = 'available',
-            order_no = NULL,
-            reserved_at = NULL,
-            updated_at = NOW()
-        FROM expired
-        WHERE card_secrets.order_no = expired.out_trade_no
-          AND card_secrets.status = 'reserved'
-        RETURNING card_secrets.id
-      )
-      SELECT COUNT(*)::text AS expired_count FROM expired
-    `,
-    [safeLimit],
-  );
-
-  return Number(result.rows[0]?.expired_count ?? 0);
-}
-
+/**
+ * 过期单个订单（BullMQ worker 调用）。
+ * 仅当订单仍为 pending 且已超过 expires_at 时生效，同时释放预占卡密。
+ */
 export async function expireSingleOrder(outTradeNo: string): Promise<boolean> {
   await ensureStoreSchema();
   const result = await getPool().query<{ expired_count: string }>(
@@ -86,29 +45,4 @@ export async function expireSingleOrder(outTradeNo: string): Promise<boolean> {
   );
 
   return Number(result.rows[0]?.expired_count ?? 0) > 0;
-}
-
-export async function expireOrderIfNeeded(outTradeNo: string) {
-  await getPool().query(
-    `
-      WITH expired AS (
-        UPDATE orders
-        SET status = 'expired'
-        WHERE out_trade_no = $1
-          AND status = 'pending'
-          AND paid_at IS NULL
-          AND expires_at <= NOW()
-        RETURNING out_trade_no
-      )
-      UPDATE card_secrets
-      SET status = 'available',
-          order_no = NULL,
-          reserved_at = NULL,
-          updated_at = NOW()
-      FROM expired
-      WHERE card_secrets.order_no = expired.out_trade_no
-        AND card_secrets.status = 'reserved'
-    `,
-    [outTradeNo],
-  );
 }
