@@ -1,4 +1,4 @@
-import { getPool } from "@/lib/db";
+﻿import { getPool } from "@/lib/db";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
 /**

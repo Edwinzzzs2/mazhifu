@@ -157,20 +157,29 @@ export async function createOrder(
     const createdOrder = result.rows[0];
 
     // 下单成功后，立即往队列投一个延迟过期任务（到期自动取消 + 释放卡密）
+    const delayMs = expiresMinutes * 60 * 1000;
     try {
       const { orderExpireQueue } = await import("@/lib/queue");
-      const delayMs = expiresMinutes * 60 * 1000;
       await orderExpireQueue.add(
         "expire",
         { out_trade_no: outTradeNo },
         {
           delay: delayMs,
-          jobId: `expire:${outTradeNo}`, // 防止重复投递
+          jobId: `expire:${outTradeNo}`,
         },
       );
     } catch (queueErr) {
-      // 队列投递失败不影响下单，依靠懒过期兜底
-      console.error("[queue] 投递过期任务失败，将依赖懒过期兜底", queueErr);
+      // 队列不可用时，用进程内 setTimeout 做本地兜底（进程重启会丢失，但至少覆盖大部分场景）
+      console.error("[queue] 投递过期任务失败，启用本地 setTimeout 兜底", queueErr);
+      setTimeout(async () => {
+        try {
+          const { expireSingleOrder } = await import("@/lib/order-expiration");
+          const expired = await expireSingleOrder(outTradeNo);
+          console.log(`[fallback:expire] ${outTradeNo} → ${expired ? "已过期" : "跳过"}`);
+        } catch (err) {
+          console.error(`[fallback:expire] ${outTradeNo} 兜底过期失败`, err);
+        }
+      }, delayMs);
     }
 
     return { order: createdOrder, access_token: accessToken };
