@@ -71,14 +71,15 @@ async function handleNotify(request: Request) {
 
     if (!confirmed) {
       if (querySucceeded) {
-        // ❌ 回查接口正常返回，但 status=0（明确未支付）——拒绝，不能认账
-        console.warn("[mapay:notify] query returned unpaid; callback rejected", {
+        // 回查接口正常返回，但 status≠1（未支付）——不认账，但返回 success 停止重推
+        // 可能是人工在码支付后台手动点了回调，订单实际未支付
+        console.warn("[mapay:notify] query returned unpaid; ignoring callback", {
           out_trade_no: outTradeNo,
           payload,
           queryResult,
           query_status: queryResult.status,
         });
-        return new NextResponse("fail", { status: 400 });
+        return new NextResponse("success", { status: 200 });
       }
 
       // ⚠️ 回查接口本身返回了错误（code≠1），状态不确定，fallback 信任 webhook
@@ -99,7 +100,7 @@ async function handleNotify(request: Request) {
       if (updated) {
         await fulfillOrder(outTradeNo)
       }
-      return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
+      return new NextResponse("success", { status: 200 });
     }
 
     // ③ 回查确认 status=1：以主动查询结果为准更新订单状态
@@ -110,8 +111,13 @@ async function handleNotify(request: Request) {
       payload,
       queryResult,
     });
+    // 即使 markOrderFromQuery 返回 false（金额不匹配等），
+    // 也返回 success 避免码支付无限重推。问题留给人工核实处理。
     if (!updated) {
-      return new NextResponse("fail", { status: 400 });
+      console.warn("[mapay:notify] mark failed but returning success to stop retries", {
+        out_trade_no: outTradeNo,
+      });
+      return new NextResponse("success", { status: 200 });
     }
   } catch (err) {
     if (isAbortError(err)) {
@@ -137,7 +143,8 @@ async function handleNotify(request: Request) {
     if (updated) {
       await fulfillOrder(outTradeNo)
     }
-    return new NextResponse(updated ? "success" : "fail", { status: updated ? 200 : 400 });
+    // 无论是否更新成功都返回 success，避免无限重推
+    return new NextResponse("success", { status: 200 });
   }
 
   // ④ 回查确认支付成功，同步发货

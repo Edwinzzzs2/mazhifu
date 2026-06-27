@@ -50,8 +50,6 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [verifyMsg, setVerifyMsg] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -66,36 +64,6 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
     await navigator.clipboard.writeText(text);
     setCopied(key);
     setTimeout(() => setCopied(""), 1400);
-  }
-
-  async function handleVerify() {
-    setVerifying(true);
-    setVerifyMsg("");
-    try {
-      const resp = await fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}/verify`, {
-        method: "POST",
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        setVerifyMsg(`核实失败: ${data.message || "未知错误"}`);
-        return;
-      }
-      const actionLabels: Record<string, string> = {
-        marked_paid: "已确认支付成功，正在发货",
-        marked_expired: "确认未支付，已标记过期",
-        no_change: "查询完成，订单状态未变（待付款中）",
-      };
-      setVerifyMsg(actionLabels[data.action] || `操作完成: ${data.action}`);
-      // 刷新详情
-      const refreshResp = await fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`);
-      if (refreshResp.ok) {
-        setDetail(await refreshResp.json());
-      }
-    } catch (err) {
-      setVerifyMsg(`网络错误: ${String(err)}`);
-    } finally {
-      setVerifying(false);
-    }
   }
 
   if (loading) {
@@ -178,32 +146,6 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
             ))}
           </ul>
         )}
-
-        {/* 手动核实按钮 */}
-        <div className="mt-4 flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={verifying}
-            onClick={handleVerify}
-            className="w-full gap-1.5 border-sky-200 text-sky-700 hover:bg-sky-50 hover:text-sky-800"
-          >
-            <ShieldCheck className={`h-3.5 w-3.5 ${verifying ? "animate-pulse" : ""}`} />
-            {verifying ? "查询中…" : "手动核实"}
-          </Button>
-          {verifyMsg && (
-            <div className={`text-xs px-2 py-1.5 rounded ${
-              verifyMsg.includes("失败") || verifyMsg.includes("错误")
-                ? "bg-red-50 text-red-600"
-                : verifyMsg.includes("支付成功")
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-slate-50 text-slate-600"
-            }`}>
-              {verifyMsg}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -219,6 +161,7 @@ export function AdminOrderList() {
   const [inputQ, setInputQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -271,6 +214,33 @@ export function AdminOrderList() {
     const next = Math.max(1, Math.min(totalPages, p));
     setPage(next);
     void load(next, status, q);
+  }
+
+  async function handleVerify(e: React.MouseEvent, outTradeNo: string) {
+    e.stopPropagation(); // 阻止展开行
+    setVerifyingId(outTradeNo);
+    try {
+      const resp = await fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}/verify`, {
+        method: "POST",
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(`核实失败: ${data.message || "未知错误"}`);
+        return;
+      }
+      const actionLabels: Record<string, string> = {
+        marked_paid: "已确认支付成功",
+        marked_expired: "确认未支付，已标记过期",
+        no_change: "查询完成，状态未变",
+      };
+      alert(actionLabels[data.action] || `操作完成: ${data.action}`);
+      // 刷新表格
+      void load(page, status, q);
+    } catch (err) {
+      alert(`网络错误: ${String(err)}`);
+    } finally {
+      setVerifyingId(null);
+    }
   }
 
   return (
@@ -404,12 +374,13 @@ export function AdminOrderList() {
                 <th className="px-4 py-3">支付状态</th>
                 <th className="px-4 py-3">发货状态</th>
                 <th className="px-4 py-3">下单时间</th>
+                <th className="px-4 py-3">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sky-50">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
                     {loading ? "正在加载…" : "暂无订单"}
                   </td>
                 </tr>
@@ -445,10 +416,22 @@ export function AdminOrderList() {
                       <td className="px-4 py-3 text-xs text-slate-400">
                         {formatDate(order.created_at)}
                       </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          disabled={verifyingId === order.out_trade_no}
+                          onClick={(e) => handleVerify(e, order.out_trade_no)}
+                        >
+                          <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                          {verifyingId === order.out_trade_no ? "核实中…" : "核实"}
+                        </Button>
+                      </td>
                     </tr>
                     {expandedId === order.out_trade_no && (
                       <tr>
-                        <td colSpan={9} className="p-0">
+                        <td colSpan={10} className="p-0">
                           <OrderDetailPanel outTradeNo={order.out_trade_no} />
                         </td>
                       </tr>
