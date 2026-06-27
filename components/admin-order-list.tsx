@@ -347,6 +347,16 @@ export function AdminOrderList() {
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       <StatusPill value={order.status} map={STATUS_LABELS} />
                       <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1 text-xs"
+                        disabled={verifyingId === order.out_trade_no}
+                        onClick={(e) => handleVerify(e, order.out_trade_no)}
+                      >
+                        <ShieldCheck className="mr-1 h-3 w-3" />
+                        {verifyingId === order.out_trade_no ? "核实中" : "核实"}
+                      </Button>
                     </div>
                   </div>
                 </div>
