@@ -10,6 +10,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { AdminOrderDetail, AdminOrderListItem, AdminOrderListResult } from "@/lib/orders";
 
@@ -225,7 +226,7 @@ export function AdminOrderList() {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        alert(`核实失败: ${data.message || "未知错误"}`);
+        toast.error("核实失败", { description: data.message || "未知错误" });
         return;
       }
       const actionLabels: Record<string, string> = {
@@ -233,11 +234,17 @@ export function AdminOrderList() {
         marked_expired: "确认未支付，已标记过期",
         no_change: "查询完成，状态未变",
       };
-      alert(actionLabels[data.action] || `操作完成: ${data.action}`);
+      const actionLabel = actionLabels[data.action];
+      const toastOptions = actionLabel ? undefined : { description: data.action };
+      if (data.action === "no_change") {
+        toast.info(actionLabel || "操作完成", toastOptions);
+      } else {
+        toast.success(actionLabel || "操作完成", toastOptions);
+      }
       // 刷新表格
       void load(page, status, q);
     } catch (err) {
-      alert(`网络错误: ${String(err)}`);
+      toast.error("网络错误", { description: String(err) });
     } finally {
       setVerifyingId(null);
     }

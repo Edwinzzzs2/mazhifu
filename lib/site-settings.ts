@@ -1,4 +1,5 @@
 import { getPool } from "@/lib/db";
+import { createLogger } from "@/lib/logger";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
 export type SiteSettings = {
@@ -17,6 +18,7 @@ export type SiteSettings = {
 
 const SITE_SETTINGS_KEY = "site";
 const MAX_NOTICE_ITEMS = 8;
+const logger = createLogger("site-settings");
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   site_name: "码付小铺",
@@ -116,7 +118,7 @@ export async function getSiteSettingsSafe() {
   try {
     return await getSiteSettings();
   } catch (error) {
-    console.error("site settings fallback to defaults", error);
+    logger.error("fallback to default settings", { error });
     return DEFAULT_SITE_SETTINGS;
   }
 }

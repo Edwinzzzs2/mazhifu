@@ -1,9 +1,12 @@
 ﻿import { Worker } from "bullmq";
 import { ORDER_EXPIRE_QUEUE_NAME } from "@/lib/queue-names";
+import { createLogger } from "@/lib/logger";
 import { getSharedRedisConnection } from "@/lib/redis";
 import type { OrderExpirePayload } from "@/lib/queue";
 
 let expireWorker: Worker | null = null;
+const workerLogger = createLogger("worker");
+const expireLogger = createLogger("worker:expire");
 
 export function startWorkers() {
   if (expireWorker) {
@@ -17,7 +20,10 @@ export function startWorkers() {
       const { expireSingleOrder } = await import("@/lib/order-expiration");
       const { out_trade_no } = job.data;
       const expired = await expireSingleOrder(out_trade_no);
-      console.log(`[worker:expire] ${out_trade_no} -> ${expired ? "已过期" : "跳过（已付款或已过期）"}`);
+      expireLogger.info(expired ? "order expired" : "order skipped", {
+        out_trade_no,
+        result: expired ? "expired" : "skipped",
+      });
     },
     {
       connection: getSharedRedisConnection(),
@@ -26,14 +32,17 @@ export function startWorkers() {
   );
 
   expireWorker.on("failed", (job, err) => {
-    console.error(`[worker:expire] 任务失败 ${job?.data.out_trade_no}`, err);
+    expireLogger.error("job failed", {
+      error: err,
+      out_trade_no: job?.data.out_trade_no,
+    });
   });
 
-  console.log(`[worker] BullMQ worker 已启动：${ORDER_EXPIRE_QUEUE_NAME}`);
+  workerLogger.info("BullMQ worker started", { queue: ORDER_EXPIRE_QUEUE_NAME });
 
   // --- 优雅关闭 ---
   const shutdown = async (signal: string) => {
-    console.log(`[worker] 收到 ${signal}，正在关闭 worker...`);
+    workerLogger.info("shutdown signal received", { signal });
     await stopWorkers();
     process.exit(0);
   };

@@ -10,6 +10,14 @@ export function isRedisConfigured() {
   return Boolean(REDIS_HOST);
 }
 
+export function getRedisConfigSummary() {
+  return {
+    host: REDIS_HOST || null,
+    port: REDIS_PORT,
+    password_configured: Boolean(REDIS_PASSWORD),
+  };
+}
+
 /**
  * 获取共享 Redis 连接（单例）。
  * BullMQ 的 Queue 和 Worker 共用同一个连接，无需每次新建。

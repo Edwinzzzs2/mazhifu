@@ -1,6 +1,6 @@
 import { createLogger } from "@/lib/logger";
 import type { OrderRecord } from "@/lib/orders";
-import { isRedisConfigured } from "@/lib/redis";
+import { getRedisConfigSummary, isRedisConfigured } from "@/lib/redis";
 
 const queueLogger = createLogger("queue");
 const fallbackExpireLogger = createLogger("fallback:expire");
@@ -53,13 +53,19 @@ export async function scheduleOrderExpiration(order: ExpirableOrder) {
       { out_trade_no: order.out_trade_no },
       {
         delay: delayMs,
-        jobId: `expire:${order.out_trade_no}`,
+        jobId: `expire-${order.out_trade_no}`,
       },
     );
+    queueLogger.info("expire job enqueued", {
+      out_trade_no: order.out_trade_no,
+      delay_ms: delayMs,
+      redis: getRedisConfigSummary(),
+    });
   } catch (error) {
     queueLogger.error("expire job enqueue failed; enabling local setTimeout fallback", {
       out_trade_no: order.out_trade_no,
       delay_ms: delayMs,
+      redis: getRedisConfigSummary(),
       error,
     });
     scheduleLocalFallback(order, delayMs);

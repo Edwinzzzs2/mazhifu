@@ -1,5 +1,13 @@
+import { inspect } from "node:util";
+
 type LogLevel = "info" | "warn" | "error";
 type LogMeta = Record<string, unknown>;
+
+const LEVEL_LABELS: Record<LogLevel, string> = {
+  info: "INFO",
+  warn: "WARN",
+  error: "ERROR",
+};
 
 const SENSITIVE_KEYS = new Set([
   "access_token",
@@ -56,11 +64,30 @@ function redactUrl(value: string) {
 }
 
 function serializeError(error: Error) {
+  const extra = error as Error & {
+    address?: unknown;
+    code?: unknown;
+    command?: unknown;
+    errno?: unknown;
+    port?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+    syscall?: unknown;
+  };
+
   return {
     name: error.name,
     message: error.message,
     stack: error.stack,
     cause: error.cause,
+    code: extra.code,
+    errno: extra.errno,
+    syscall: extra.syscall,
+    address: extra.address,
+    port: extra.port,
+    command: extra.command,
+    status: extra.status,
+    status_code: extra.statusCode,
   };
 }
 
@@ -122,21 +149,41 @@ function formatTimestamp(date = new Date()) {
   ].join(" ");
 }
 
+function indentBlock(value: string) {
+  return value
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+function formatMeta(meta: LogMeta) {
+  const payload = sanitizeValue(meta);
+  return indentBlock(
+    inspect(payload, {
+      breakLength: 120,
+      colors: false,
+      compact: false,
+      depth: 8,
+      sorted: true,
+    }),
+  );
+}
+
 function writeLog(level: LogLevel, scope: string, message: string, meta?: LogMeta) {
-  const payload = meta ? sanitizeValue(meta) : undefined;
-  const line = `${formatTimestamp()} [${scope}] ${message}`;
+  const header = `[${formatTimestamp()}] [${LEVEL_LABELS[level]}] [${scope}] ${message}`;
+  const line = meta ? `${header}\n${formatMeta(meta)}` : header;
 
   if (level === "error") {
-    payload === undefined ? console.error(line) : console.error(line, payload);
+    console.error(line);
     return;
   }
 
   if (level === "warn") {
-    payload === undefined ? console.warn(line) : console.warn(line, payload);
+    console.warn(line);
     return;
   }
 
-  payload === undefined ? console.log(line) : console.log(line, payload);
+  console.log(line);
 }
 
 export function createLogger(scope: string) {

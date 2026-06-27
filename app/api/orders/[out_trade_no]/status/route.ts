@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { createLogger } from "@/lib/logger";
 import {
   getOrderViewByQueryAuth,
   getOrderViewInternal,
   getOrderViewWithAccess,
   retryOrderFulfillment,
 } from "@/lib/orders";
+
+const logger = createLogger("orders:status");
 
 type StatusRouteContext = {
   params: {
@@ -61,7 +64,10 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
       await retryOrderFulfillment(order.out_trade_no);
       order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
     } catch (error) {
-      console.error("Order fulfillment retry failed", error);
+      logger.error("fulfillment retry failed", {
+        error,
+        out_trade_no: order.out_trade_no,
+      });
     }
   }
 
