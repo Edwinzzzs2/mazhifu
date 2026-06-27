@@ -104,9 +104,27 @@ function sanitizeValue(value: unknown, key = "", seen = new WeakSet<object>()): 
   );
 }
 
+function padNumber(value: number, length = 2) {
+  return String(value).padStart(length, "0");
+}
+
+function formatTimestamp(date = new Date()) {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffsetMinutes = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absOffsetMinutes / 60);
+  const offsetRemainderMinutes = absOffsetMinutes % 60;
+
+  return [
+    `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())}`,
+    `${padNumber(date.getHours())}:${padNumber(date.getMinutes())}:${padNumber(date.getSeconds())}.${padNumber(date.getMilliseconds(), 3)}`,
+    `${offsetSign}${padNumber(offsetHours)}:${padNumber(offsetRemainderMinutes)}`,
+  ].join(" ");
+}
+
 function writeLog(level: LogLevel, scope: string, message: string, meta?: LogMeta) {
   const payload = meta ? sanitizeValue(meta) : undefined;
-  const line = `[${scope}] ${message}`;
+  const line = `${formatTimestamp()} [${scope}] ${message}`;
 
   if (level === "error") {
     payload === undefined ? console.error(line) : console.error(line, payload);
