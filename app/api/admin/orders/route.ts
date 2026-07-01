@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { listOrdersForAdmin } from "@/lib/orders";
 
-function adminAllowed() {
+async function adminAllowed() {
   try {
-    return isAdminAuthenticated();
+    return await isAdminAuthenticated();
   } catch {
     return false;
   }
 }
 
 export async function GET(request: Request) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

@@ -89,6 +89,17 @@ async function initializeStoreSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id BIGSERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('ADMIN', 'USER')),
+      row_status TEXT NOT NULL DEFAULT 'NORMAL' CHECK (row_status IN ('NORMAL', 'ARCHIVED')),
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS orders_trade_no_unique
       ON orders (trade_no)
       WHERE trade_no IS NOT NULL;
@@ -126,6 +137,17 @@ async function initializeStoreSchema() {
           '订单有效期内完成支付，超时后请重新下单。',
           '遇到问题请保留订单号，切勿泄露订单访问链接。'
         )
+      )
+    )
+    ON CONFLICT (key) DO NOTHING;
+
+    INSERT INTO settings (key, value)
+    VALUES (
+      'instance_general',
+      jsonb_build_object(
+        'disallow_user_registration', false,
+        'disallow_password_auth', false,
+        'disallow_change_username', false
       )
     )
     ON CONFLICT (key) DO NOTHING;

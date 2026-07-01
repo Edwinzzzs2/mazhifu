@@ -3,16 +3,16 @@ import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { parseProductInput } from "@/lib/product-input";
 import { createProduct, listCategories, listProducts } from "@/lib/products";
 
-function adminAllowed() {
+async function adminAllowed() {
   try {
-    return isAdminAuthenticated();
+    return await isAdminAuthenticated();
   } catch {
     return false;
   }
 }
 
 export async function GET() {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

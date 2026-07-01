@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { getSiteSettings, updateSiteSettings } from "@/lib/site-settings";
+import {
+  getInstanceGeneralSettings,
+  isAdminAuthenticated,
+  updateInstanceGeneralSettings,
+} from "@/lib/admin-auth";
 
 async function adminAllowed() {
   try {
@@ -15,7 +18,7 @@ export async function GET() {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
-  const settings = await getSiteSettings();
+  const settings = await getInstanceGeneralSettings();
   return NextResponse.json({ settings });
 }
 
@@ -25,10 +28,10 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const settings = await updateSiteSettings((await request.json()) as Record<string, unknown>);
+    const settings = await updateInstanceGeneralSettings((await request.json()) as Record<string, unknown>);
     return NextResponse.json({ settings });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "保存站点设置失败";
+    const message = error instanceof Error ? error.message : "保存访问设置失败";
     return NextResponse.json({ message }, { status: 400 });
   }
 }

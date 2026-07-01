@@ -13,7 +13,12 @@ import { AdminCardInventory } from "@/components/admin-card-inventory";
 import { AdminOrderList } from "@/components/admin-order-list";
 import { AdminProductManager } from "@/components/admin-product-manager";
 import { AdminSiteSettings } from "@/components/admin-site-settings";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import {
+  getCurrentAdminUser,
+  getInstanceGeneralSettings,
+  listAdminUsers,
+  needsAdminSetup,
+} from "@/lib/admin-auth";
 import { listCategories, listProducts } from "@/lib/products";
 import { getSiteSettings } from "@/lib/site-settings";
 
@@ -40,15 +45,11 @@ type AdminPageProps = {
 };
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  let authenticated = false;
-
-  try {
-    authenticated = isAdminAuthenticated();
-  } catch {
-    redirect("/admin/login?error=config");
+  const [currentUser, setupRequired] = await Promise.all([getCurrentAdminUser(), needsAdminSetup()]);
+  if (setupRequired) {
+    redirect("/admin/signup");
   }
-
-  if (!authenticated) {
+  if (currentUser?.role !== "ADMIN") {
     redirect("/admin/login");
   }
 
@@ -58,10 +59,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ? (searchParams!.tab as Tab)
       : "products";
 
-  const [categories, products, siteSettings] = await Promise.all([
+  const [categories, products, siteSettings, generalSettings, adminUsers] = await Promise.all([
     listCategories(true),
     listProducts(true),
     getSiteSettings(),
+    getInstanceGeneralSettings(),
+    listAdminUsers(),
   ]);
 
   return (
@@ -79,7 +82,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm text-slate-950">{siteSettings.site_name}</span>
-            <span className="block text-xs font-semibold text-slate-500">管理后台</span>
+            <span className="block text-xs font-semibold text-slate-500">@{currentUser.username}</span>
           </span>
         </div>
 
@@ -171,7 +174,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           )}
           {tab === "inventory" && <AdminCardInventory products={products} />}
           {tab === "orders" && <AdminOrderList />}
-          {tab === "settings" && <AdminSiteSettings initial_settings={siteSettings} />}
+          {tab === "settings" && (
+            <AdminSiteSettings
+              initial_settings={siteSettings}
+              initial_general_settings={generalSettings}
+              initial_users={adminUsers}
+            />
+          )}
         </div>
       </main>
 

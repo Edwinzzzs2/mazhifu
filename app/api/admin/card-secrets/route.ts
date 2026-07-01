@@ -6,9 +6,9 @@ import {
   listCardSecrets,
 } from "@/lib/card-secrets";
 
-function adminAllowed() {
+async function adminAllowed() {
   try {
-    return isAdminAuthenticated();
+    return await isAdminAuthenticated();
   } catch {
     return false;
   }
@@ -26,7 +26,7 @@ function normalizeSecrets(value: unknown) {
 }
 
 export async function GET(request: Request) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

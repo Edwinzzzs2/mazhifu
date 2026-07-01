@@ -62,6 +62,23 @@ CREATE TABLE IF NOT EXISTS card_secrets (
   CONSTRAINT card_secrets_status_check CHECK (status IN ('available', 'reserved', 'used'))
 );
 
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGSERIAL PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('ADMIN', 'USER')),
+  row_status TEXT NOT NULL DEFAULT 'NORMAL' CHECK (row_status IN ('NORMAL', 'ARCHIVED')),
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS orders_trade_no_unique
   ON orders (trade_no)
   WHERE trade_no IS NOT NULL;
@@ -75,3 +92,14 @@ CREATE INDEX IF NOT EXISTS card_secrets_product_status_idx
   ON card_secrets(product_id, status, id);
 CREATE INDEX IF NOT EXISTS card_secrets_order_status_idx
   ON card_secrets(order_no, status);
+
+INSERT INTO settings (key, value)
+VALUES (
+  'instance_general',
+  jsonb_build_object(
+    'disallow_user_registration', false,
+    'disallow_password_auth', false,
+    'disallow_change_username', false
+  )
+)
+ON CONFLICT (key) DO NOTHING;

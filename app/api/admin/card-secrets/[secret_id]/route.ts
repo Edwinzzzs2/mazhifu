@@ -8,16 +8,16 @@ type CardSecretRouteContext = {
   };
 };
 
-function adminAllowed() {
+async function adminAllowed() {
   try {
-    return isAdminAuthenticated();
+    return await isAdminAuthenticated();
   } catch {
     return false;
   }
 }
 
 export async function DELETE(_request: Request, { params }: CardSecretRouteContext) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

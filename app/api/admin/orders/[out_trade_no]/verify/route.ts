@@ -11,9 +11,9 @@ import type { OrderRecord } from "@/lib/orders";
 
 const logger = createLogger("admin:verify");
 
-function adminAllowed() {
+async function adminAllowed() {
   try {
-    return isAdminAuthenticated();
+    return await isAdminAuthenticated();
   } catch {
     return false;
   }
@@ -27,7 +27,7 @@ export async function POST(
   _request: Request,
   { params }: { params: { out_trade_no: string } },
 ) {
-  if (!adminAllowed()) {
+  if (!(await adminAllowed())) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
