@@ -11,9 +11,9 @@ import type { OrderRecord } from "@/lib/orders";
 
 const logger = createLogger("admin:verify");
 
-async function adminAllowed() {
+async function adminAllowed(request: Request) {
   try {
-    return await isAdminAuthenticated();
+    return await isAdminAuthenticated(request);
   } catch {
     return false;
   }
@@ -24,10 +24,10 @@ async function adminAllowed() {
  * 手动核实：调用码支付 API 查询订单真实支付状态，并根据结果更新本地订单。
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { out_trade_no: string } },
 ) {
-  if (!(await adminAllowed())) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

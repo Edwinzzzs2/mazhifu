@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { adminFetch } from "@/lib/admin-client-auth";
 import type { CategoryRecord, ProductRecord } from "@/lib/products";
 
 type AdminProductManagerProps = {
@@ -115,7 +116,7 @@ export function AdminProductManager({
     setMessage("");
 
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         selectedProduct
           ? "/api/admin/products/" + encodeURIComponent(selectedProduct.id)
           : "/api/admin/products",
@@ -155,7 +156,7 @@ export function AdminProductManager({
     setSaving(true);
     setMessage("");
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         "/api/admin/products/" + encodeURIComponent(selectedProduct.id),
         { method: "DELETE" },
       );

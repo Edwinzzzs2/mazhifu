@@ -9,16 +9,16 @@ type ProductRouteContext = {
   };
 };
 
-async function adminAllowed() {
+async function adminAllowed(request: Request) {
   try {
-    return await isAdminAuthenticated();
+    return await isAdminAuthenticated(request);
   } catch {
     return false;
   }
 }
 
 export async function PATCH(request: Request, { params }: ProductRouteContext) {
-  if (!(await adminAllowed())) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
@@ -35,8 +35,8 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: ProductRouteContext) {
-  if (!(await adminAllowed())) {
+export async function DELETE(request: Request, { params }: ProductRouteContext) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

@@ -12,9 +12,9 @@ type UserRouteContext = {
   };
 };
 
-async function adminAllowed() {
+async function adminAllowed(request: Request) {
   try {
-    return await isAdminAuthenticated();
+    return await isAdminAuthenticated(request);
   } catch {
     return false;
   }
@@ -35,7 +35,7 @@ function normalizeStatus(value: unknown): AdminUserStatus | undefined {
 }
 
 export async function PATCH(request: Request, { params }: UserRouteContext) {
-  if (!(await adminAllowed())) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

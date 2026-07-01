@@ -100,6 +100,15 @@ async function initializeStoreSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS admin_refresh_tokens (
+      token_id TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS orders_trade_no_unique
       ON orders (trade_no)
       WHERE trade_no IS NOT NULL;
@@ -116,6 +125,8 @@ async function initializeStoreSchema() {
       ON card_secrets (product_id, status, id);
     CREATE INDEX IF NOT EXISTS card_secrets_order_status_idx
       ON card_secrets (order_no, status);
+    CREATE INDEX IF NOT EXISTS admin_refresh_tokens_user_idx
+      ON admin_refresh_tokens (user_id, expires_at DESC);
 
     INSERT INTO settings (key, value)
     VALUES (

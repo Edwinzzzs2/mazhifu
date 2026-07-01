@@ -5,16 +5,16 @@ import {
   updateInstanceGeneralSettings,
 } from "@/lib/admin-auth";
 
-async function adminAllowed() {
+async function adminAllowed(request: Request) {
   try {
-    return await isAdminAuthenticated();
+    return await isAdminAuthenticated(request);
   } catch {
     return false;
   }
 }
 
-export async function GET() {
-  if (!(await adminAllowed())) {
+export async function GET(request: Request) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 
@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  if (!(await adminAllowed())) {
+  if (!(await adminAllowed(request))) {
     return NextResponse.json({ message: "unauthorized" }, { status: 401 });
   }
 

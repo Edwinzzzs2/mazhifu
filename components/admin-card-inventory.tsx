@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { adminFetch } from "@/lib/admin-client-auth";
 import type { CardSecretRecord, CardSecretStats } from "@/lib/card-secrets";
 import type { ProductRecord } from "@/lib/products";
 
@@ -173,7 +174,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
       url.searchParams.set("product_id", nextProductId);
       if (nextStatus) url.searchParams.set("status", nextStatus);
 
-      const response = await fetch(url, { cache: "no-store" });
+      const response = await adminFetch(url, { cache: "no-store" });
       const data = (await response.json()) as {
         card_secrets?: CardSecretRecord[];
         stats?: CardSecretStats;
@@ -213,7 +214,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
 
     setSubmitting(true);
     try {
-      const response = await fetch("/api/admin/card-secrets", {
+      const response = await adminFetch("/api/admin/card-secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -261,7 +262,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
   }
 
   async function deleteSecret(secretId: string) {
-    const response = await fetch("/api/admin/card-secrets/" + encodeURIComponent(secretId), {
+    const response = await adminFetch("/api/admin/card-secrets/" + encodeURIComponent(secretId), {
       method: "DELETE",
     });
     if (!response.ok) {

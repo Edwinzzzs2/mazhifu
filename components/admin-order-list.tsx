@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { adminFetch } from "@/lib/admin-client-auth";
 import type { AdminOrderDetail, AdminOrderListItem, AdminOrderListResult } from "@/lib/orders";
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
@@ -54,7 +55,7 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`)
+    adminFetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`)
       .then((r) => r.json())
       .then((data: AdminOrderDetail) => setDetail(data))
       .catch(() => setDetail(null))
@@ -174,7 +175,7 @@ export function AdminOrderList() {
         url.searchParams.set("page", String(nextPage));
         if (nextStatus) url.searchParams.set("status", nextStatus);
         if (nextQ) url.searchParams.set("q", nextQ);
-        const resp = await fetch(url, { cache: "no-store" });
+        const resp = await adminFetch(url, { cache: "no-store" });
         const data = (await resp.json()) as AdminOrderListResult & { message?: string };
         if (!resp.ok) throw new Error(data.message ?? "加载失败");
         setOrders(data.orders ?? []);
@@ -221,7 +222,7 @@ export function AdminOrderList() {
     e.stopPropagation(); // 阻止展开行
     setVerifyingId(outTradeNo);
     try {
-      const resp = await fetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}/verify`, {
+      const resp = await adminFetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}/verify`, {
         method: "POST",
       });
       const data = await resp.json();

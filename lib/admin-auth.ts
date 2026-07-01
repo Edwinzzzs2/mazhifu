@@ -3,9 +3,12 @@ import { cookies } from "next/headers";
 import { getPool } from "@/lib/db";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
-export const ADMIN_COOKIE_NAME = "mazhifu_admin";
+export const ADMIN_REFRESH_COOKIE_NAME = "mazhifu_refresh";
 
-const SESSION_SECONDS = 60 * 60 * 12;
+const ACCESS_TOKEN_SECONDS = 60 * 15;
+const REFRESH_TOKEN_SECONDS = 60 * 60 * 24 * 30;
+const ACCESS_TOKEN_AUDIENCE = "admin.access-token";
+const REFRESH_TOKEN_AUDIENCE = "admin.refresh-token";
 const USERNAME_MATCHER = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,34}[a-zA-Z0-9])?$/;
 
 export type AdminUserRole = "ADMIN" | "USER";
@@ -27,41 +30,96 @@ export type InstanceGeneralSettings = {
   disallow_change_username: boolean;
 };
 
-export const DEFAULT_INSTANCE_GENERAL_SETTINGS: InstanceGeneralSettings = {
-  disallow_user_registration: false,
-  disallow_password_auth: false,
-  disallow_change_username: false,
+type AdminAccessTokenResponse = {
+  access_token: string;
+  access_token_expires_at: string;
 };
 
-export const adminCookieOptions = {
+type AdminTokenPair = AdminAccessTokenResponse & {
+  refresh_token: string;
+};
+
+type TokenClaims = {
+  aud: string;
+  exp: number;
+  iat: number;
+  sub: string;
+  token_id?: string;
+  username?: string;
+  role?: AdminUserRole;
+  row_status?: AdminUserStatus;
+};
+
+export const adminRefreshCookieOptions = {
   httpOnly: true,
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
   path: "/",
-  maxAge: SESSION_SECONDS,
+  maxAge: REFRESH_TOKEN_SECONDS,
 };
 
-function getSessionSecret() {
-  const secret =
-    process.env.ADMIN_SESSION_SECRET ||
-    process.env.CARD_SECRET_ENCRYPTION_KEY ||
-    process.env.MAPAY_KEY;
+function getTokenSecret() {
+  const secret = process.env.CARD_SECRET_ENCRYPTION_KEY || process.env.MAPAY_KEY;
 
   if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("ADMIN_SESSION_SECRET is required in production");
+    throw new Error("CARD_SECRET_ENCRYPTION_KEY is required for auth tokens");
   }
 
-  return secret || "mazhifu-development-session-secret";
+  return secret || "mazhifu-development-token-secret";
 }
 
-function signSessionPayload(payload: string) {
-  return crypto.createHmac("sha256", getSessionSecret()).update(payload).digest("base64url");
+function base64UrlEncode(value: string | Buffer) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function base64UrlDecode(value: string) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function signValue(value: string) {
+  return crypto.createHmac("sha256", getTokenSecret()).update(value).digest("base64url");
 }
 
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function unixNow() {
+  return Math.floor(Date.now() / 1000);
+}
+
+function secondsFromNow(seconds: number) {
+  return new Date((unixNow() + seconds) * 1000);
+}
+
+function createSignedToken(claims: TokenClaims) {
+  const header = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = base64UrlEncode(JSON.stringify(claims));
+  const signature = signValue(`${header}.${payload}`);
+  return `${header}.${payload}.${signature}`;
+}
+
+function parseSignedToken(token: string, audience: string): TokenClaims | null {
+  const [header, payload, signature] = token.split(".");
+  if (!header || !payload || !signature) {
+    return null;
+  }
+
+  if (!safeEqual(signature, signValue(`${header}.${payload}`))) {
+    return null;
+  }
+
+  try {
+    const claims = JSON.parse(base64UrlDecode(payload)) as TokenClaims;
+    if (claims.aud !== audience || !claims.sub || !claims.iat || !claims.exp || claims.exp <= unixNow()) {
+      return null;
+    }
+    return claims;
+  } catch {
+    return null;
+  }
 }
 
 function isNumericUsername(username: string) {
@@ -129,6 +187,56 @@ function normalizeGeneralSettings(value: unknown): InstanceGeneralSettings {
     disallow_password_auth: Boolean(data.disallow_password_auth),
     disallow_change_username: Boolean(data.disallow_change_username),
   };
+}
+
+function getBearerToken(request: Request) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const [scheme, token] = authorization.split(/\s+/, 2);
+  return scheme?.toLowerCase() === "bearer" ? token : "";
+}
+
+function getCookieValue(cookieHeader: string, name: string) {
+  return cookieHeader
+    .split(";")
+    .map((item) => item.trim())
+    .map((item) => {
+      const separator = item.indexOf("=");
+      return separator >= 0
+        ? [item.slice(0, separator), item.slice(separator + 1)]
+        : [item, ""];
+    })
+    .find(([key]) => key === name)?.[1] ?? "";
+}
+
+export function getAdminRefreshTokenFromRequest(request: Request) {
+  return getCookieValue(request.headers.get("cookie") ?? "", ADMIN_REFRESH_COOKIE_NAME);
+}
+
+function createAccessToken(user: AdminUser): AdminAccessTokenResponse {
+  const now = unixNow();
+  const expiresAt = secondsFromNow(ACCESS_TOKEN_SECONDS);
+  return {
+    access_token: createSignedToken({
+      aud: ACCESS_TOKEN_AUDIENCE,
+      exp: Math.floor(expiresAt.getTime() / 1000),
+      iat: now,
+      sub: String(user.id),
+      username: user.username,
+      role: user.role,
+      row_status: user.row_status,
+    }),
+    access_token_expires_at: expiresAt.toISOString(),
+  };
+}
+
+function createRefreshToken(user: AdminUser, tokenId: string, expiresAt: Date) {
+  return createSignedToken({
+    aud: REFRESH_TOKEN_AUDIENCE,
+    exp: Math.floor(expiresAt.getTime() / 1000),
+    iat: unixNow(),
+    sub: String(user.id),
+    token_id: tokenId,
+  });
 }
 
 export async function getInstanceGeneralSettings() {
@@ -385,40 +493,170 @@ export async function authenticateAdminUser(username: string, password: string) 
   return normalizeUser(user);
 }
 
-export function createAdminSessionValue(user: Pick<AdminUser, "id" | "username" | "role">) {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const payload = `${user.id}.${user.username}.${user.role}.${timestamp}`;
-  return `${payload}.${signSessionPayload(payload)}`;
-}
-
-async function getUserFromSessionValue(value?: string) {
-  if (!value) {
+async function getUserFromAccessToken(accessToken: string) {
+  const claims = parseSignedToken(accessToken, ACCESS_TOKEN_AUDIENCE);
+  if (!claims || !claims.username || !claims.role) {
     return null;
   }
 
-  const [idText, username, role, timestamp, signature] = value.split(".");
-  if (!idText || !username || !role || !timestamp || !signature || !/^\d+$/.test(idText) || !/^\d+$/.test(timestamp)) {
-    return null;
-  }
-
-  const age = Math.floor(Date.now() / 1000) - Number(timestamp);
-  const payload = `${idText}.${username}.${role}.${timestamp}`;
-  if (age < 0 || age > SESSION_SECONDS || !safeEqual(signature, signSessionPayload(payload))) {
-    return null;
-  }
-
-  const user = await getAdminUserById(Number(idText));
-  if (!user || user.username !== username || user.role !== role || user.row_status === "ARCHIVED") {
+  const user = await getAdminUserById(Number(claims.sub));
+  if (
+    !user ||
+    user.username !== claims.username ||
+    user.role !== claims.role ||
+    user.row_status !== "NORMAL"
+  ) {
     return null;
   }
   return user;
 }
 
-export async function getCurrentAdminUser() {
-  return getUserFromSessionValue(cookies().get(ADMIN_COOKIE_NAME)?.value);
+async function getUserAndTokenIdFromRefreshToken(refreshToken: string) {
+  const claims = parseSignedToken(refreshToken, REFRESH_TOKEN_AUDIENCE);
+  if (!claims?.token_id || !/^\d+$/.test(claims.sub)) {
+    return null;
+  }
+
+  await ensureStoreSchema();
+  const result = await getPool().query<AdminUser & { token_id: string; expires_at: Date; revoked_at: Date | null }>(
+    `
+      SELECT
+        users.id, users.username, users.display_name, users.role, users.row_status,
+        users.created_at, users.updated_at,
+        tokens.token_id, tokens.expires_at, tokens.revoked_at
+      FROM admin_refresh_tokens tokens
+      JOIN admin_users users ON users.id = tokens.user_id
+      WHERE tokens.token_id = $1 AND tokens.user_id = $2
+    `,
+    [claims.token_id, Number(claims.sub)],
+  );
+  const row = result.rows[0];
+  if (!row || row.revoked_at || row.expires_at.getTime() <= Date.now() || row.row_status !== "NORMAL") {
+    return null;
+  }
+
+  return { user: normalizeUser(row) };
 }
 
-export async function isAdminAuthenticated() {
-  const user = await getCurrentAdminUser();
+export async function createAdminTokenPair(user: AdminUser): Promise<AdminTokenPair> {
+  await ensureStoreSchema();
+
+  const refreshTokenId = crypto.randomUUID();
+  const refreshExpiresAt = secondsFromNow(REFRESH_TOKEN_SECONDS);
+  const refreshToken = createRefreshToken(user, refreshTokenId, refreshExpiresAt);
+  await getPool().query(
+    `
+      INSERT INTO admin_refresh_tokens (token_id, user_id, expires_at)
+      VALUES ($1, $2, $3)
+    `,
+    [refreshTokenId, user.id, refreshExpiresAt],
+  );
+
+  return {
+    ...createAccessToken(user),
+    refresh_token: refreshToken,
+  };
+}
+
+export async function rotateAdminRefreshToken(refreshToken: string): Promise<{
+  user: AdminUser;
+  tokens: AdminTokenPair;
+} | null> {
+  const claims = parseSignedToken(refreshToken, REFRESH_TOKEN_AUDIENCE);
+  if (!claims?.token_id || !/^\d+$/.test(claims.sub)) {
+    return null;
+  }
+
+  await ensureStoreSchema();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const currentResult = await client.query<AdminUser & { token_id: string; expires_at: Date; revoked_at: Date | null }>(
+      `
+        SELECT
+          users.id, users.username, users.display_name, users.role, users.row_status,
+          users.created_at, users.updated_at,
+          tokens.token_id, tokens.expires_at, tokens.revoked_at
+        FROM admin_refresh_tokens tokens
+        JOIN admin_users users ON users.id = tokens.user_id
+        WHERE tokens.token_id = $1 AND tokens.user_id = $2
+        FOR UPDATE
+      `,
+      [claims.token_id, Number(claims.sub)],
+    );
+    const current = currentResult.rows[0];
+    if (!current || current.revoked_at || current.expires_at.getTime() <= Date.now() || current.row_status !== "NORMAL") {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    const user = normalizeUser(current);
+    const refreshTokenId = crypto.randomUUID();
+    const refreshExpiresAt = secondsFromNow(REFRESH_TOKEN_SECONDS);
+    const newRefreshToken = createRefreshToken(user, refreshTokenId, refreshExpiresAt);
+    await client.query(
+      `
+        INSERT INTO admin_refresh_tokens (token_id, user_id, expires_at)
+        VALUES ($1, $2, $3)
+      `,
+      [refreshTokenId, user.id, refreshExpiresAt],
+    );
+    await client.query("DELETE FROM admin_refresh_tokens WHERE token_id = $1", [claims.token_id]);
+    await client.query("COMMIT");
+
+    return {
+      user,
+      tokens: {
+        ...createAccessToken(user),
+        refresh_token: newRefreshToken,
+      },
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function revokeAdminRefreshToken(refreshToken: string) {
+  const claims = parseSignedToken(refreshToken, REFRESH_TOKEN_AUDIENCE);
+  if (!claims?.token_id || !/^\d+$/.test(claims.sub)) {
+    return;
+  }
+
+  await ensureStoreSchema();
+  await getPool().query(
+    "UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE token_id = $1 AND user_id = $2",
+    [claims.token_id, Number(claims.sub)],
+  );
+}
+
+export async function getCurrentAdminUserFromRequest(request: Request) {
+  const accessToken = getBearerToken(request);
+  if (accessToken) {
+    const accessUser = await getUserFromAccessToken(accessToken);
+    if (accessUser) {
+      return accessUser;
+    }
+  }
+
+  const refreshToken = getAdminRefreshTokenFromRequest(request);
+  if (!refreshToken) {
+    return null;
+  }
+  return (await getUserAndTokenIdFromRefreshToken(refreshToken))?.user ?? null;
+}
+
+export async function getCurrentAdminUser() {
+  const refreshToken = cookies().get(ADMIN_REFRESH_COOKIE_NAME)?.value;
+  if (!refreshToken) {
+    return null;
+  }
+  return (await getUserAndTokenIdFromRefreshToken(refreshToken))?.user ?? null;
+}
+
+export async function isAdminAuthenticated(request?: Request) {
+  const user = request ? await getCurrentAdminUserFromRequest(request) : await getCurrentAdminUser();
   return user?.role === "ADMIN";
 }

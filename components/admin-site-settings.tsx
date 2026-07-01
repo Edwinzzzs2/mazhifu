@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { adminFetch } from "@/lib/admin-client-auth";
 import type { AdminUser, AdminUserRole, InstanceGeneralSettings } from "@/lib/admin-auth";
 import type { SiteSettings } from "@/lib/site-settings";
 
@@ -124,7 +125,7 @@ export function AdminSiteSettings({
     setMessage("");
 
     try {
-      const response = await fetch("/api/admin/settings", {
+      const response = await adminFetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(toPayload(settings, noticeText)),
@@ -154,7 +155,7 @@ export function AdminSiteSettings({
     setMessage("");
 
     try {
-      const response = await fetch("/api/admin/access-settings", {
+      const response = await adminFetch("/api/admin/access-settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(generalSettings),
@@ -188,7 +189,7 @@ export function AdminSiteSettings({
     setMessage("");
 
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await adminFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userForm),
@@ -226,7 +227,7 @@ export function AdminSiteSettings({
     setMessage("");
 
     try {
-      const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+      const response = await adminFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

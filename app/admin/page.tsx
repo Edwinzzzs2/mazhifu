@@ -3,13 +3,13 @@ import { redirect } from "next/navigation";
 import {
   ClipboardList,
   ExternalLink,
-  LogOut,
   Package,
   Settings2,
   Store,
   Warehouse,
 } from "lucide-react";
 import { AdminCardInventory } from "@/components/admin-card-inventory";
+import { AdminLogoutButton } from "@/components/admin-logout-button";
 import { AdminOrderList } from "@/components/admin-order-list";
 import { AdminProductManager } from "@/components/admin-product-manager";
 import { AdminSiteSettings } from "@/components/admin-site-settings";
@@ -114,15 +114,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <ExternalLink className="h-4 w-4" />
             查看前台
           </Link>
-          <form action="/api/admin/logout" method="post">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700"
-            >
-              <LogOut className="h-4 w-4" />
-              退出登录
-            </button>
-          </form>
+          <AdminLogoutButton className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700" />
         </div>
       </aside>
 
@@ -157,14 +149,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               >
                 <ExternalLink className="h-4 w-4" />
               </Link>
-              <form action="/api/admin/logout" method="post">
-                <button
-                  type="submit"
-                  className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </form>
+              <AdminLogoutButton
+                icon_only
+                className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-sm"
+              />
             </div>
           </div>
 

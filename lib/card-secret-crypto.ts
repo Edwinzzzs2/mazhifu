@@ -1,10 +1,7 @@
 import crypto from "crypto";
 
 function getSecretMaterial() {
-  const material =
-    process.env.CARD_SECRET_ENCRYPTION_KEY ||
-    process.env.ADMIN_SESSION_SECRET ||
-    process.env.MAPAY_KEY;
+  const material = process.env.CARD_SECRET_ENCRYPTION_KEY || process.env.MAPAY_KEY;
 
   if (!material) {
     throw new Error("CARD_SECRET_ENCRYPTION_KEY is required");
