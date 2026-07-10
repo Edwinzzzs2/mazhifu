@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseMapayPayload } from "@/lib/mapay";
+import { parseMapayPayload, verifyMapayPayload } from "@/lib/mapay";
 import { getRequestOrigin } from "@/lib/request-utils";
 import { createLogger } from "@/lib/logger";
 import {
@@ -19,8 +19,12 @@ export async function GET(request: Request) {
   });
 
   const outTradeNo = payload.out_trade_no;
-  const state = new URL(request.url).searchParams.get("state") ?? "";
-  const validState = Boolean(outTradeNo && await getOrderWithAccess(outTradeNo, state));
+  const callbackSignatureValid = verifyMapayPayload(payload);
+  const accessState = callbackSignatureValid ? payload.param ?? "" : "";
+  const accessibleOrder = outTradeNo && accessState
+    ? await getOrderWithAccess(outTradeNo, accessState)
+    : null;
+  const validState = Boolean(accessibleOrder);
   const origin = getRequestOrigin();
   
   const redirectUrl = new URL(
@@ -32,6 +36,8 @@ export async function GET(request: Request) {
   logger.info("response", {
     status: 303,
     out_trade_no: outTradeNo || null,
+    callback_signature_valid: callbackSignatureValid,
+    access_source: accessibleOrder ? "param" : null,
     access_restored: validState,
     redirect_url: redirectUrl.toString(),
   });
@@ -40,7 +46,7 @@ export async function GET(request: Request) {
   if (outTradeNo && validState) {
     response.cookies.set(
       getOrderAccessCookieName(outTradeNo),
-      state,
+      accessState,
       orderAccessCookieOptions,
     );
   }

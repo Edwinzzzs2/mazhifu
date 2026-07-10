@@ -88,21 +88,18 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl);
-  returnUrl.searchParams.set(
-    "state",
-    access_token || createOrderAccessGrant(order.out_trade_no),
-  );
+  const returnUrl = new URL("/pay/return", appUrl).toString();
+  const returnState = access_token || createOrderAccessGrant(order.out_trade_no);
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl.toString(),
+    return_url: returnUrl,
     name: order.product_name.slice(0, 127),
     money: Number(order.money).toFixed(2),
-    param: order.product_id,
+    param: returnState,
     channel_id: process.env.MAPAY_CHANNEL_ID || "",
     device: process.env.MAPAY_DEVICE || "pc",
   };
@@ -178,22 +175,19 @@ export function buildMapaySubmitUrl({
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl);
-  returnUrl.searchParams.set(
-    "state",
-    access_token || createOrderAccessGrant(order.out_trade_no),
-  );
+  const returnUrl = new URL("/pay/return", appUrl).toString();
+  const returnState = access_token || createOrderAccessGrant(order.out_trade_no);
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl.toString(),
+    return_url: returnUrl,
     name: order.product_name,
     money: Number(order.money).toFixed(2),
     sitename: process.env.MAPAY_SITENAME || site_name || "码付小铺",
-    param: order.product_id,
+    param: returnState,
     channel_id: process.env.MAPAY_CHANNEL_ID || "",
     device: process.env.MAPAY_DEVICE || "",
   };
