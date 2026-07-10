@@ -28,8 +28,8 @@ export default async function OrderPage({ params }: OrderPageProps) {
 
   return (
     <main className="page-shell px-3 py-5 sm:px-4 sm:py-8">
-      <section className="admin-panel mx-auto w-full max-w-5xl overflow-hidden">
-        <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
+      <section className="admin-panel mx-auto w-full max-w-6xl overflow-hidden">
+        <div className="border-b border-slate-200 px-4 py-5 sm:px-6">
           <Badge className={paid ? "bg-emerald-600" : "bg-sky-600"}>
             {paid ? "支付成功" : "订单追踪"}
           </Badge>
@@ -39,7 +39,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
           <p className="mt-1 break-all font-mono text-xs text-slate-500">{order.out_trade_no}</p>
         </div>
 
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)]">
           <div className="min-w-0 p-4 sm:p-6">
             <div className="grid gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-3">
               <SummaryMetric label="实付金额" value={`¥${Number(order.money).toFixed(2)}`} accent />
@@ -83,7 +83,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
             </div>
           </div>
 
-          <aside className="border-t border-slate-200 bg-slate-50/60 p-4 sm:p-6 lg:border-l lg:border-t-0">
+          <aside className="min-w-0 border-t border-slate-200 bg-slate-50/60 p-4 sm:p-6 lg:border-l lg:border-t-0">
             <div className="mb-4">
               <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
                 <ReceiptText className="h-4 w-4" />

@@ -115,16 +115,23 @@ export function OrderStatusPanel({
       </div>
 
       {paid && !compact ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50/70 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-sm font-bold text-emerald-800">发货内容</div>
+        <section className="min-w-0 rounded-md border border-emerald-200 bg-emerald-50/70 p-3 sm:p-4">
+          <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-emerald-900">发货内容</h3>
+              {order.delivery_content.length > 1 ? (
+                <p className="mt-0.5 text-xs text-emerald-700/80">
+                  共 {order.delivery_content.length} 份，请逐项保存
+                </p>
+              ) : null}
+            </div>
             {order.delivery_content.length ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={copyDelivery}
-                className="h-8 border-emerald-200 bg-white px-2.5 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                className="h-8 shrink-0 border-emerald-200 bg-white px-2.5 text-xs text-emerald-700 shadow-none hover:bg-emerald-50 hover:text-emerald-800"
               >
                 <Copy className="h-3.5 w-3.5" />
                 {copied ? "已复制" : "复制"}
@@ -132,15 +139,29 @@ export function OrderStatusPanel({
             ) : null}
           </div>
           {order.delivery_content.length ? (
-            <div className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-emerald-100 bg-white p-3 font-mono text-sm leading-6 text-slate-800 [overflow-wrap:anywhere]">
-              {order.delivery_content.join("\n")}
+            <div className="max-h-[min(28rem,50vh)] min-w-0 space-y-2 overflow-y-auto overscroll-contain rounded-md border border-emerald-100 bg-white p-2 shadow-sm">
+              {order.delivery_content.map((content, index) => (
+                <div
+                  key={`${index}-${content.slice(0, 24)}`}
+                  className="min-w-0 rounded border border-slate-100 bg-slate-50/70 px-3 py-3"
+                >
+                  {order.delivery_content.length > 1 ? (
+                    <div className="mb-2 text-[11px] font-semibold text-emerald-700">
+                      第 {index + 1} 份
+                    </div>
+                  ) : null}
+                  <pre className="m-0 select-text whitespace-pre-wrap break-words font-mono text-sm leading-6 text-slate-800 [overflow-wrap:anywhere]">
+                    {content}
+                  </pre>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="rounded-md border border-emerald-100 bg-white px-3 py-3 text-sm leading-6 text-slate-500">
               已确认付款，等待库存补发。补货后刷新订单会再次尝试发货。
             </div>
           )}
-        </div>
+        </section>
       ) : null}
 
       <Button
