@@ -282,13 +282,13 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
 
   return (
     <section className="admin-panel min-w-0 overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
+          <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
             <PackageCheck className="h-4 w-4" />
             发货库存
           </div>
-          <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">
+          <h2 className="mt-1 truncate text-lg font-bold text-slate-950">
             {selectedProduct ? selectedProduct.name : "选择商品后导入发货内容"}
           </h2>
         </div>
@@ -304,12 +304,12 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
         </Button>
       </div>
 
-      <div className="border-b border-slate-200 bg-slate-50/45 px-4 py-4 sm:px-5">
-        <div className="grid gap-3 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(120px,1fr))]">
-          <label className="grid gap-2 text-sm font-semibold text-slate-700">
+      <div className="border-b border-slate-200 bg-slate-50/60 px-4 py-4 sm:px-5">
+        <div className="grid gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.4fr)_repeat(4,minmax(110px,1fr))]">
+          <label className="grid gap-2 bg-white px-4 py-3 text-xs font-semibold text-slate-500">
             目标商品
             <select
-              className="admin-input h-10 bg-white"
+              className="admin-input h-9 bg-white py-1.5 text-sm font-semibold text-slate-800"
               value={productId}
               onChange={(event) => handleProductChange(event.target.value)}
             >
@@ -331,8 +331,8 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
         </div>
       </div>
 
-      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[390px_minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+      <div className="grid gap-4 p-4 sm:p-5 min-[1800px]:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="space-y-4 min-[1800px]:sticky min-[1800px]:top-5 min-[1800px]:self-start">
           <Card className="shadow-sm">
             <CardHeader className="space-y-1.5 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -422,7 +422,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                   type="button"
                   onClick={importContents}
                   disabled={submitting || !productId || parsedItems.length === 0}
-                  className="bg-emerald-600 shadow-none hover:bg-emerald-700"
+                  className="shadow-none"
                 >
                   <Upload className="h-4 w-4" />
                   {submitting ? "导入中" : "导入库存"}
@@ -471,8 +471,8 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
         </aside>
 
         <div className="min-w-0 space-y-4">
-          <div className="admin-panel-muted p-3">
-            <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto] lg:items-center">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center">
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
@@ -483,7 +483,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                 />
               </label>
               <select
-                className="admin-input h-10 bg-white lg:w-36"
+                className="admin-input h-10 bg-white"
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
               >
@@ -493,7 +493,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                   </option>
                 ))}
               </select>
-              <div className="text-sm font-semibold text-slate-500 lg:w-28 lg:text-right">
+              <div className="whitespace-nowrap text-sm font-semibold text-slate-500 sm:text-right">
                 当前 {visibleSecrets.length} 条
               </div>
             </div>
@@ -517,16 +517,25 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
 
           <div className="table-shell hidden lg:block">
             <div className="touch-scroll max-h-[600px] overflow-auto">
-              <table className="w-full min-w-[920px] border-collapse bg-white text-sm">
+              <table className="w-full min-w-[1120px] table-fixed border-collapse bg-white text-sm">
+                <colgroup>
+                  <col className="w-[72px]" />
+                  <col />
+                  <col className="w-[92px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-[160px]" />
+                  <col className="w-[126px]" />
+                  <col className="w-[176px]" />
+                </colgroup>
                 <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-500">
                   <tr>
-                    <th className="w-20 px-4 py-3">ID</th>
+                    <th className="px-4 py-3">ID</th>
                     <th className="px-4 py-3">发货内容</th>
-                    <th className="w-24 px-4 py-3">状态</th>
-                    <th className="w-44 px-4 py-3">订单</th>
-                    <th className="w-44 px-4 py-3">批次 / 备注</th>
-                    <th className="w-28 px-4 py-3">入库时间</th>
-                    <th className="w-40 px-4 py-3 text-right">操作</th>
+                    <th className="px-4 py-3">状态</th>
+                    <th className="px-4 py-3">订单</th>
+                    <th className="px-4 py-3">批次 / 备注</th>
+                    <th className="px-4 py-3">入库时间</th>
+                    <th className="px-4 py-3 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -534,12 +543,13 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                     visibleSecrets.map((secret) => (
                       <tr key={secret.id} className="align-top hover:bg-sky-50/60">
                         <td className="px-4 py-3 font-mono text-xs text-slate-500">{secret.id}</td>
-                        <td className="px-4 py-3">
+                        <td className="min-w-0 px-4 py-3">
                           <div
                             className={
-                              "max-w-xl break-words rounded-md border border-slate-100 bg-slate-50 px-3 py-2 font-mono text-xs leading-5 text-slate-700 " +
+                              "max-h-20 w-full overflow-hidden break-all rounded-md border border-slate-100 bg-slate-50 px-3 py-2 font-mono text-xs leading-5 text-slate-700 " +
                               (isLongContent(secret.secret) ? "whitespace-pre-wrap" : "")
                             }
+                            title={secret.secret}
                           >
                             {secret.secret}
                           </div>
@@ -547,14 +557,16 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                         <td className="px-4 py-3">
                           <StatusPill status={secret.status} />
                         </td>
-                        <td className="break-all px-4 py-3 font-mono text-xs text-slate-500">
-                          {secret.order_no || "-"}
+                        <td className="min-w-0 px-4 py-3 font-mono text-xs text-slate-500">
+                          <div className="truncate" title={secret.order_no || undefined}>
+                            {secret.order_no || "-"}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-500">
-                          <div className="font-semibold text-slate-700">{secret.batch_no || "-"}</div>
+                        <td className="min-w-0 px-4 py-3 text-xs text-slate-500">
+                          <div className="truncate font-semibold text-slate-700" title={secret.batch_no || undefined}>{secret.batch_no || "-"}</div>
                           {secret.note ? <div className="mt-1 line-clamp-2">{secret.note}</div> : null}
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-400">{formatDate(secret.created_at)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">{formatDate(secret.created_at)}</td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -647,9 +659,9 @@ function StatCard({
   };
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className="bg-white px-4 py-3">
       <div className="text-xs font-semibold text-slate-500">{label}</div>
-      <div className={"mt-1 text-2xl font-black " + tones[tone]}>{value}</div>
+      <div className={"mt-1 text-xl font-bold " + tones[tone]}>{value}</div>
     </div>
   );
 }

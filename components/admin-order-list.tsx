@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { adminFetch } from "@/lib/admin-client-auth";
 import type { AdminOrderDetail, AdminOrderListItem, AdminOrderListResult } from "@/lib/orders";
 
@@ -84,12 +85,16 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
           <dt className="text-slate-400">订单号</dt>
           <dd className="flex items-center gap-1.5 font-mono break-all">
             {detail.out_trade_no}
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => copyText(detail.out_trade_no, "no")}
-              className="shrink-0 text-slate-400 hover:text-sky-600"
+              className="h-6 w-6 shrink-0 text-slate-400"
+              title="复制订单号"
             >
               <Copy className="h-3 w-3" />
-            </button>
+            </Button>
           </dd>
 
           <dt className="text-slate-400">平台流水号</dt>
@@ -134,16 +139,20 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
                 className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs"
               >
                 <span className="break-all">{secret}</span>
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => copyText(secret, `secret-${i}`)}
-                  className="shrink-0 text-slate-400 hover:text-sky-600"
+                  className="h-6 w-6 shrink-0 text-slate-400"
+                  title="复制发货内容"
                 >
                   {copied === `secret-${i}` ? (
                     <span className="text-emerald-500">✓</span>
                   ) : (
                     <Copy className="h-3 w-3" />
                   )}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -183,7 +192,7 @@ export function AdminOrderList() {
         setPage(data.page ?? 1);
         setPageSize(data.page_size ?? 20);
       } catch {
-        // silently fail, keep existing data
+        toast.error("订单加载失败，请稍后重试");
       } finally {
         setLoading(false);
       }
@@ -254,16 +263,16 @@ export function AdminOrderList() {
   return (
     <section className="admin-panel min-w-0">
       {/* 标题栏 */}
-      <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
+          <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
             <ClipboardList className="h-4 w-4" />
             订单记录
           </div>
-          <h2 className="mt-1 truncate text-lg font-bold sm:text-xl">
+          <h2 className="mt-1 truncate text-lg font-bold text-slate-950">
             全部订单
             {total > 0 && (
-              <span className="ml-2 text-base font-normal text-slate-400">共 {total} 笔</span>
+              <span className="ml-2 text-sm font-normal text-slate-400">共 {total} 笔</span>
             )}
           </h2>
         </div>
@@ -280,9 +289,9 @@ export function AdminOrderList() {
       </div>
 
       {/* 筛选栏 */}
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/45 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         {/* 状态筛选 */}
-        <div className="flex flex-wrap gap-2 text-sm">
+        <div className="inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm">
           {[
             { value: "", label: "全部" },
             { value: "pending", label: "待付款" },
@@ -292,10 +301,10 @@ export function AdminOrderList() {
             <button
               key={item.value}
               onClick={() => handleStatusChange(item.value)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+              className={`whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
                 status === item.value
-                  ? "border-sky-600 bg-sky-600 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:bg-sky-50"
+                  ? "bg-sky-600 text-white"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
             >
               {item.label}
@@ -305,8 +314,8 @@ export function AdminOrderList() {
 
         {/* 搜索 */}
         <form onSubmit={handleSearch} className="flex gap-2 sm:shrink-0">
-          <input
-            className="admin-input h-9 w-full text-sm sm:w-56"
+          <Input
+            className="h-9 w-full text-sm sm:w-64"
             placeholder="订单号 / 联系方式"
             value={inputQ}
             onChange={(e) => setInputQ(e.target.value)}
@@ -380,10 +389,22 @@ export function AdminOrderList() {
 
         {/* PC 表格视图 */}
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[860px] border-collapse bg-white text-sm">
+          <table className="w-full min-w-[1120px] table-fixed border-collapse bg-white text-sm">
+            <colgroup>
+              <col className="w-12" />
+              <col className="w-[218px]" />
+              <col />
+              <col className="w-[92px]" />
+              <col className="w-16" />
+              <col className="w-[150px]" />
+              <col className="w-[104px]" />
+              <col className="w-[104px]" />
+              <col className="w-[142px]" />
+              <col className="w-[108px]" />
+            </colgroup>
             <thead className="bg-slate-50 text-left text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-3 w-8" />
+                <th className="px-4 py-3" />
                 <th className="px-4 py-3">订单号</th>
                 <th className="px-4 py-3">商品</th>
                 <th className="px-4 py-3">金额</th>
@@ -392,7 +413,7 @@ export function AdminOrderList() {
                 <th className="px-4 py-3">支付状态</th>
                 <th className="px-4 py-3">发货状态</th>
                 <th className="px-4 py-3">下单时间</th>
-                <th className="w-24 px-4 py-3">操作</th>
+                <th className="px-4 py-3">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -416,14 +437,16 @@ export function AdminOrderList() {
                           <ChevronDown className="h-4 w-4" />
                         )}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">
-                        {order.out_trade_no}
+                      <td className="min-w-0 px-4 py-3 font-mono text-xs text-slate-500">
+                        <div className="truncate" title={order.out_trade_no}>{order.out_trade_no}</div>
                       </td>
-                      <td className="max-w-[160px] truncate px-4 py-3">{order.product_name}</td>
+                      <td className="min-w-0 px-4 py-3">
+                        <div className="truncate" title={order.product_name}>{order.product_name}</div>
+                      </td>
                       <td className="px-4 py-3 font-semibold text-sky-700">¥{order.money}</td>
                       <td className="px-4 py-3">{order.quantity}</td>
-                      <td className="max-w-[120px] truncate px-4 py-3 text-slate-500 text-xs">
-                        {order.contact || "-"}
+                      <td className="min-w-0 px-4 py-3 text-xs text-slate-500">
+                        <div className="truncate" title={order.contact || undefined}>{order.contact || "-"}</div>
                       </td>
                       <td className="px-4 py-3">
                         <StatusPill value={order.status} map={STATUS_LABELS} />
@@ -431,7 +454,7 @@ export function AdminOrderList() {
                       <td className="px-4 py-3">
                         <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
                         {formatDate(order.created_at)}
                       </td>
                       <td className="px-4 py-3">
