@@ -4,6 +4,7 @@ import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
 import type { MapayQueryResult } from "@/lib/mapay";
+import { verifyOrderAccessGrant } from "@/lib/order-access";
 import type { ProductRecord } from "@/lib/products";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
@@ -118,7 +119,11 @@ function hashAccessToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function tokenMatches(storedHash: string | null, token: string) {
+function tokenMatches(outTradeNo: string, storedHash: string | null, token: string) {
+  if (verifyOrderAccessGrant(outTradeNo, token)) {
+    return true;
+  }
+
   if (!storedHash || !token) {
     return false;
   }
@@ -255,7 +260,7 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
 
 export async function getOrderWithAccess(outTradeNo: string, accessToken: string) {
   const order = await getOrderByOutTradeNo(outTradeNo);
-  return order && tokenMatches(order.status_token_hash, accessToken) ? order : null;
+  return order && tokenMatches(outTradeNo, order.status_token_hash, accessToken) ? order : null;
 }
 
 export async function getOrderViewWithAccess(outTradeNo: string, accessToken: string) {
@@ -323,7 +328,7 @@ export async function listOrdersByQueryAuth(
   const lookup = getQueryPasswordLookup(queryPassword);
   const legacyHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
 
-  const result = await getPool().query<OrderRecord>(
+  let result = await getPool().query<OrderRecord>(
     `SELECT * FROM orders
      WHERE LOWER(contact) = $1
        AND (query_password_lookup = $2 OR query_password_hash = $3)
@@ -332,10 +337,27 @@ export async function listOrdersByQueryAuth(
     [normalizedEmail, lookup, legacyHash],
   );
 
+  // Pepper 轮换或旧数据缺少 lookup 时，用邮箱缩小范围后再校验慢哈希，并在成功后修复索引。
+  if (result.rows.length === 0) {
+    result = await getPool().query<OrderRecord>(
+      `SELECT * FROM orders
+       WHERE LOWER(contact) = $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [normalizedEmail],
+    );
+  }
+
   const views: OrderView[] = [];
   for (const order of result.rows) {
     if (!verifyQueryPassword(queryPassword, order.query_password_hash)) continue;
     await upgradeLegacyQueryPassword(order, queryPassword);
+    if (order.query_password_lookup !== lookup) {
+      await getPool().query(
+        "UPDATE orders SET query_password_lookup = $2 WHERE out_trade_no = $1",
+        [order.out_trade_no, lookup],
+      );
+    }
     const deliveryContent =
       order.status === "paid" ? await getDeliverySecrets(order.out_trade_no) : [];
     views.push({ ...order, delivery_content: deliveryContent } satisfies OrderView);

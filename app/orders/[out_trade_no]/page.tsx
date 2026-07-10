@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clock3, Home, ReceiptText } from "lucide-react";
 import { OrderStatusPanel } from "@/components/order-status-panel";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ export default async function OrderPage({ params }: OrderPageProps) {
   const order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
 
   if (!order) {
-    notFound();
+    redirect(`/orders/query?order=${encodeURIComponent(params.out_trade_no)}`);
   }
 
   const paid = order.status === "paid";

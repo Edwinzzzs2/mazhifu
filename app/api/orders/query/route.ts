@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { listOrdersByQueryAuth } from "@/lib/orders";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
+const logger = createLogger("orders:query-api");
 
 export async function POST(request: Request) {
   const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
@@ -16,21 +18,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "参数错误" }, { status: 400 });
   }
 
-  const rateLimit = await checkRateLimits([
-    {
-      scope: "orders-query:client",
-      identifier: getClientRateLimitKey(request),
-      limit: 20,
-      windowSeconds: 600,
-    },
-    {
-      scope: "orders-query:email",
-      identifier: email,
-      limit: 8,
-      windowSeconds: 600,
-    },
-  ]);
+  const rateLimit = await checkRateLimits([{
+    scope: "orders-query:client",
+    identifier: getClientRateLimitKey(request),
+    limit: 30,
+    windowSeconds: 600,
+  }]);
   if (!rateLimit.allowed) {
+    logger.warn("client rate limited", { retry_after: rateLimit.retryAfter });
     return NextResponse.json(
       { message: rateLimit.unavailable ? "安全服务暂不可用" : "查询过于频繁" },
       {
@@ -41,6 +36,27 @@ export async function POST(request: Request) {
   }
 
   const orders = await listOrdersByQueryAuth(email, queryPassword);
+
+  if (orders.length === 0) {
+    const failedAttemptLimit = await checkRateLimits([{
+      scope: "orders-query:email-failed",
+      identifier: email,
+      limit: 8,
+      windowSeconds: 600,
+    }]);
+    if (!failedAttemptLimit.allowed) {
+      logger.warn("failed query rate limited", { retry_after: failedAttemptLimit.retryAfter });
+      return NextResponse.json(
+        { message: failedAttemptLimit.unavailable ? "安全服务暂不可用" : "查询失败次数过多，请稍后再试" },
+        {
+          status: failedAttemptLimit.unavailable ? 503 : 429,
+          headers: { "Retry-After": String(failedAttemptLimit.retryAfter) },
+        },
+      );
+    }
+  }
+
+  logger.info("completed", { order_count: orders.length });
 
   return NextResponse.json({
     orders: orders.map((o) => ({

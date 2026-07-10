@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       order: created.order,
       pay_type: payType,
       request_origin: origin,
+      access_token: created.access_token,
     };
 
     // 前台用户支付走 Submit 网关页，避免直接打开 MAPI 返回的 qrcode/urlscheme/第三方渲染页。

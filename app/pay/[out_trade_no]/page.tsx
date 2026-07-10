@@ -40,6 +40,7 @@ export default async function PayPage({ params }: PayPageProps) {
       order,
       pay_type: order.pay_type,
       request_origin: getRequestOrigin(),
+      access_token: accessToken,
     });
   } catch {
     configError = "支付配置未就绪，请检查 MAPAY_PID、MAPAY_KEY 和通道配置。";

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { createLogger } from "@/lib/logger";
+import { createOrderAccessGrant } from "@/lib/order-access";
 import type { OrderRecord } from "@/lib/orders";
 
 export type MapayPayload = Record<string, string>;
@@ -74,6 +75,7 @@ export type BuildMapaySubmitUrlOptions = {
   pay_type: string;
   request_origin: string;
   site_name?: string;
+  access_token?: string;
 };
 
 /**
@@ -81,19 +83,23 @@ export type BuildMapaySubmitUrlOptions = {
  * 成功后可以把 trade_no 存入订单（创建时就有平台流水号）。
  */
 export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): Promise<MapayCreateResult> {
-  const { order, pay_type, request_origin } = options;
+  const { order, pay_type, request_origin, access_token } = options;
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl).toString();
+  const returnUrl = new URL("/pay/return", appUrl);
+  returnUrl.searchParams.set(
+    "state",
+    access_token || createOrderAccessGrant(order.out_trade_no),
+  );
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl,
+    return_url: returnUrl.toString(),
     name: order.product_name.slice(0, 127),
     money: Number(order.money).toFixed(2),
     param: order.product_id,
@@ -166,19 +172,24 @@ export function buildMapaySubmitUrl({
   pay_type,
   request_origin,
   site_name,
+  access_token,
 }: BuildMapaySubmitUrlOptions) {
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl).toString();
+  const returnUrl = new URL("/pay/return", appUrl);
+  returnUrl.searchParams.set(
+    "state",
+    access_token || createOrderAccessGrant(order.out_trade_no),
+  );
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl,
+    return_url: returnUrl.toString(),
     name: order.product_name,
     money: Number(order.money).toFixed(2),
     sitename: process.env.MAPAY_SITENAME || site_name || "码付小铺",
