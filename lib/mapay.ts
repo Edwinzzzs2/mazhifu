@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createLogger } from "@/lib/logger";
-import { createOrderAccessGrant } from "@/lib/order-access";
+import { createOrderReturnGrant } from "@/lib/order-return-access";
 import type { OrderRecord } from "@/lib/orders";
 
 export type MapayPayload = Record<string, string>;
@@ -75,7 +75,7 @@ export type BuildMapaySubmitUrlOptions = {
   pay_type: string;
   request_origin: string;
   site_name?: string;
-  access_token?: string;
+  return_token?: string;
 };
 
 /**
@@ -83,13 +83,13 @@ export type BuildMapaySubmitUrlOptions = {
  * 成功后可以把 trade_no 存入订单（创建时就有平台流水号）。
  */
 export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): Promise<MapayCreateResult> {
-  const { order, pay_type, request_origin, access_token } = options;
+  const { order, pay_type, request_origin, return_token } = options;
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
   const returnUrl = new URL("/pay/return", appUrl).toString();
-  const returnState = access_token || createOrderAccessGrant(order.out_trade_no);
+  const returnState = return_token || createOrderReturnGrant(order.out_trade_no);
 
   const params: MapayPayload = {
     pid,
@@ -169,14 +169,14 @@ export function buildMapaySubmitUrl({
   pay_type,
   request_origin,
   site_name,
-  access_token,
+  return_token,
 }: BuildMapaySubmitUrlOptions) {
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
   const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
   const returnUrl = new URL("/pay/return", appUrl).toString();
-  const returnState = access_token || createOrderAccessGrant(order.out_trade_no);
+  const returnState = return_token || createOrderReturnGrant(order.out_trade_no);
 
   const params: MapayPayload = {
     pid,

@@ -68,6 +68,15 @@ async function initializeStoreSchema() {
     UPDATE orders SET unit_price = money WHERE unit_price IS NULL;
     UPDATE orders SET expires_at = created_at + INTERVAL '15 minutes' WHERE expires_at IS NULL;
 
+    CREATE TABLE IF NOT EXISTS order_access_sessions (
+      session_hash TEXT NOT NULL,
+      order_no TEXT NOT NULL REFERENCES orders(out_trade_no) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (session_hash, order_no)
+    );
+
     CREATE TABLE IF NOT EXISTS card_secrets (
       id BIGSERIAL PRIMARY KEY,
       product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -120,6 +129,10 @@ async function initializeStoreSchema() {
       WHERE status = 'pending' AND paid_at IS NULL;
     CREATE INDEX IF NOT EXISTS orders_contact_query_lookup_idx
       ON orders (LOWER(contact), query_password_lookup, created_at DESC);
+    CREATE INDEX IF NOT EXISTS order_access_sessions_order_idx
+      ON order_access_sessions (order_no);
+    CREATE INDEX IF NOT EXISTS order_access_sessions_expires_idx
+      ON order_access_sessions (expires_at);
     CREATE INDEX IF NOT EXISTS products_category_active_idx
       ON products (category_id, active);
     CREATE UNIQUE INDEX IF NOT EXISTS card_secrets_product_hash_unique

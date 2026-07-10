@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Box,
   Check,
   CheckCircle2,
-  ChevronRight,
   Clock3,
   Copy,
   Download,
@@ -14,7 +12,6 @@ import {
   List,
   Mail,
   Minus,
-  PackageCheck,
   Plus,
   Search,
   ShieldCheck,
@@ -23,6 +20,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { CategoryRecord, ProductRecord } from "@/lib/products";
 import type { SiteSettings } from "@/lib/site-settings";
 
@@ -88,7 +87,7 @@ export function Storefront({
   const currentCategoryName =
     categoryId === "all"
       ? "全部商品"
-      : categories.find((category) => category.id === categoryId)?.name ?? "商品目录";
+      : categories.find((category) => category.id === categoryId)?.name ?? "全部商品";
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const filteredProducts = normalizedSearch
     ? categoryProducts.filter((product) => {
@@ -102,6 +101,13 @@ export function Storefront({
       })
     : categoryProducts;
   const noticeItems = site_settings.notice_items;
+  const availableCategories = categories
+    .map((category) => ({
+      ...category,
+      productCount: products.filter((product) => product.category_id === category.id).length,
+    }))
+    .filter((category) => category.productCount > 0);
+  const showCategoryFilter = availableCategories.length > 1;
 
   function openProduct(product: ProductRecord) {
     setSelectedProduct(product);
@@ -200,165 +206,146 @@ export function Storefront({
       </header>
 
       <main>
-        {/* ── Hero ── */}
-        <section className="border-b border-slate-200/80">
-          <div className="mx-auto max-w-7xl px-4 py-7 md:px-6 md:py-10">
-            <div className="max-w-3xl">
-              <h1 className="text-3xl font-black leading-tight tracking-normal text-slate-950 sm:text-4xl lg:text-5xl">
-                {site_settings.site_name}
-              </h1>
-              <p className="mt-3 text-base leading-7 text-slate-600 sm:text-lg">
-                {site_settings.site_description}
-              </p>
-              {site_settings.announcement ? (
-                <div className="soft-banner mt-5 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
-                  {site_settings.announcement}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Notice ── */}
-        <section className="border-b border-slate-200/80 bg-white/50">
-          <div className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-6">
-            {checkout_failed && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <section className="border-b border-slate-200/80 bg-white/35">
+          <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+            {checkout_failed ? (
+              <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 下单失败，请检查数据库、商品库存或支付配置。
               </div>
-            )}
-            <div className="mb-3 flex items-center gap-2 font-bold">
-              <ShieldCheck className="h-5 w-5 text-sky-500" />
-              购买须知
+            ) : null}
+
+            <div className="max-w-3xl">
+              <h1 className="text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
+                {site_settings.site_name}
+              </h1>
+              <p className="mt-2 text-base leading-7 text-slate-600 sm:text-lg">
+                {site_settings.site_description}
+              </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {noticeItems.map((notice, index) => (
-                <div
-                  key={notice}
-                  className="flex min-h-20 gap-3 rounded-md border border-slate-200 bg-white/95 p-4 text-sm leading-6 shadow-sm"
-                >
-                  <span className="font-bold text-sky-600">0{index + 1}</span>
-                  <span>{notice}</span>
+
+            {site_settings.announcement ? (
+              <div className="soft-banner mt-4 max-w-3xl px-4 py-2.5 text-sm font-semibold leading-6 text-slate-700">
+                {site_settings.announcement}
+              </div>
+            ) : null}
+
+            {noticeItems.length > 0 ? (
+              <div className="mt-5 flex max-w-5xl items-start gap-3 border-t border-slate-200 pt-4 text-sm leading-6 text-slate-600">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                <div className="min-w-0 sm:flex sm:gap-3">
+                  <span className="shrink-0 font-bold text-slate-800">购买须知</span>
+                  <div className="mt-1 grid gap-1 sm:mt-0 sm:flex sm:flex-wrap sm:gap-x-4">
+                    {noticeItems.map((notice) => (
+                      <span key={notice}>{notice}</span>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
-        {/* ── Products ── */}
-        <section className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-bold text-sky-600">
-                <PackageCheck className="h-4 w-4" />
-                商品目录
-              </div>
-              <h2 className="mt-1 truncate text-2xl font-black text-slate-950">
+        <section className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-7">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-baseline gap-2.5">
+              <h2 className="truncate text-2xl font-black text-slate-950">
                 {currentCategoryName}
               </h2>
+              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-400">
+                {filteredProducts.length} 件
+              </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-sm font-semibold shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode("card");
-                    setSearchTerm("");
-                  }}
-                  className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
-                    viewMode === "card"
-                      ? "bg-sky-600 text-white"
-                      : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
-                  }`}
-                >
-                  <Grid2X2 className="h-4 w-4" />
-                  卡片
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("table")}
-                  className={`inline-flex h-8 items-center justify-center gap-1.5 rounded px-3 transition-colors ${
-                    viewMode === "table"
-                      ? "bg-sky-600 text-white"
-                      : "text-slate-500 hover:bg-sky-50 hover:text-sky-700"
-                  }`}
-                >
-                  <List className="h-4 w-4" />
-                  表格
-                </button>
-              </div>
+
+            <div className="inline-flex shrink-0 rounded-md border border-slate-200 bg-white p-1 shadow-sm">
+              <Button
+                type="button"
+                size="icon"
+                variant={viewMode === "card" ? "default" : "ghost"}
+                className="h-8 w-8 shadow-none"
+                aria-label="卡片视图"
+                aria-pressed={viewMode === "card"}
+                title="卡片视图"
+                onClick={() => {
+                  setViewMode("card");
+                  setSearchTerm("");
+                }}
+              >
+                <Grid2X2 className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant={viewMode === "table" ? "default" : "ghost"}
+                className="h-8 w-8 shadow-none"
+                aria-label="表格视图"
+                aria-pressed={viewMode === "table"}
+                title="表格视图"
+                onClick={() => setViewMode("table")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
             </div>
           </div>
 
-          {/* 手机端：横向滚动分类条；PC端：左侧竖排 */}
-          <div className="flex flex-col gap-4 lg:grid lg:items-start lg:gap-5 lg:grid-cols-[220px_1fr]">
-            {/* 手机：横向滚动；lg+：竖排侧边栏 */}
-            <aside className="lg:sticky lg:top-24">
-              {/* 手机横向滚动 */}
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
-                <button
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    categoryId === "all"
-                      ? "border-sky-600 bg-sky-600 text-white"
-                      : "border-slate-200 bg-white text-slate-600"
-                  }`}
-                  onClick={() => setCategoryId("all")}
+          {showCategoryFilter || viewMode === "table" ? (
+            <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              {showCategoryFilter ? (
+                <div
+                  className="flex gap-2 overflow-x-auto pb-1"
+                  role="tablist"
+                  aria-label="商品分类"
                 >
-                  全部
-                  <span className={`rounded-full px-1.5 text-xs ${
-                    categoryId === "all" ? "bg-white/25" : "bg-slate-100"
-                  }`}>{products.length}</span>
-                </button>
-                {categories.map((category) => {
-                  const count = products.filter((p) => p.category_id === category.id).length;
-                  return (
-                    <button
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={categoryId === "all" ? "default" : "outline"}
+                    className="shrink-0 shadow-none"
+                    role="tab"
+                    aria-selected={categoryId === "all"}
+                    onClick={() => setCategoryId("all")}
+                  >
+                    全部
+                    <span className="text-xs tabular-nums opacity-70">{products.length}</span>
+                  </Button>
+                  {availableCategories.map((category) => (
+                    <Button
                       key={category.id}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                        categoryId === category.id
-                          ? "border-sky-600 bg-sky-600 text-white"
-                          : "border-slate-200 bg-white text-slate-600"
-                      }`}
+                      type="button"
+                      size="sm"
+                      variant={categoryId === category.id ? "default" : "outline"}
+                      className="shrink-0 shadow-none"
+                      role="tab"
+                      aria-selected={categoryId === category.id}
                       onClick={() => setCategoryId(category.id)}
                     >
                       {category.name}
-                      <span className={`rounded-full px-1.5 text-xs ${
-                        categoryId === category.id ? "bg-white/25" : "bg-slate-100"
-                      }`}>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {/* PC 竖排 */}
-              <div className="admin-panel hidden p-2 lg:block">
-                <button
-                  className={`category-button ${categoryId === "all" ? "is-active" : ""}`}
-                  onClick={() => setCategoryId("all")}
-                >
-                  <Box className="h-4 w-4" />
-                  全部商品
-                  <span>{products.length}</span>
-                </button>
-                {categories.map((category) => {
-                  const count = products.filter((p) => p.category_id === category.id).length;
-                  return (
-                    <button
-                      key={category.id}
-                      className={`category-button ${categoryId === category.id ? "is-active" : ""}`}
-                      onClick={() => setCategoryId(category.id)}
-                    >
-                      <Box className="h-4 w-4" />
-                      {category.name}
-                      <span>{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
+                      <span className="text-xs tabular-nums opacity-70">
+                        {category.productCount}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
 
+              {viewMode === "table" ? (
+                <label className="relative w-full md:ml-auto md:max-w-xs">
+                  <span className="sr-only">搜索商品</span>
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="搜索商品"
+                    className="bg-white pl-9"
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="mt-5">
             {viewMode === "card" ? (
               filteredProducts.length ? (
-                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:gap-4 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
                   {filteredProducts.map((product) => (
                     <ProductCard
                       key={product.id}
@@ -368,22 +355,16 @@ export function Storefront({
                   ))}
                 </div>
               ) : (
-                <div className="admin-panel grid min-h-64 place-items-center px-4 py-12 text-center">
+                <div className="grid min-h-56 place-items-center rounded-md border border-dashed border-slate-300 bg-white/55 px-4 py-12 text-center">
                   <div>
-                    <ShoppingBag className="mx-auto h-10 w-10 text-sky-400" />
+                    <ShoppingBag className="mx-auto h-9 w-9 text-sky-400" />
                     <div className="mt-3 text-base font-bold text-slate-800">暂无匹配商品</div>
                     <div className="mt-1 text-sm text-slate-500">请切换分类或清空搜索关键词</div>
                   </div>
                 </div>
               )
             ) : (
-              <ProductTable
-                categoryName={currentCategoryName}
-                products={filteredProducts}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onOpen={openProduct}
-              />
+              <ProductTable products={filteredProducts} onOpen={openProduct} />
             )}
           </div>
         </section>
@@ -635,87 +616,71 @@ function ProductCard({
   onOpen: () => void;
 }) {
   return (
-    <button
-      className="product-card group text-left"
-      onClick={onOpen}
-    >
-      <div className="relative aspect-[4/3] overflow-hidden bg-sky-50 sm:aspect-[16/9]">
-        {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="grid h-full place-items-center bg-[linear-gradient(135deg,#effaff,#dff4ff)]">
-            <ShoppingBag className="h-10 w-10 text-sky-400 sm:h-12 sm:w-12" strokeWidth={1.4} />
+    <Card className="product-card">
+      <button
+        type="button"
+        className="group block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500"
+        onClick={onOpen}
+      >
+        <div className="relative h-28 overflow-hidden bg-sky-50 sm:h-32">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="grid h-full place-items-center bg-sky-50">
+              <ShoppingBag className="h-9 w-9 text-sky-400" strokeWidth={1.5} />
+            </div>
+          )}
+        </div>
+
+        <div className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="line-clamp-2 min-h-10 text-[15px] font-bold leading-5 text-slate-950">
+              {product.name}
+            </h3>
+            {product.badge ? (
+              <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
+                {product.badge}
+              </span>
+            ) : null}
           </div>
-        )}
-      </div>
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="line-clamp-2 min-h-9 text-[13px] font-bold leading-[18px] text-slate-950 sm:min-h-10 sm:text-[15px] sm:leading-5">
-            {product.name}
-          </h2>
-          {product.badge ? (
-            <span className="shrink-0 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600">
-              {product.badge}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 line-clamp-1 text-xs text-slate-500 sm:text-[13px]">
-          {product.subtitle || product.description}
-        </p>
-        <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-2.5">
-          <div>
-            <span className="text-xs text-sky-500">¥</span>
-            <span className="text-xl font-bold text-sky-500">
-              {Number(product.price).toFixed(2)}
+          <p className="mt-1 line-clamp-1 text-[13px] text-slate-500">
+            {product.subtitle || product.description}
+          </p>
+
+          <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+            <div className="leading-none text-sky-600">
+              <span className="mr-0.5 text-xs">¥</span>
+              <span className="text-xl font-bold tabular-nums">
+                {Number(product.price).toFixed(2)}
+              </span>
+            </div>
+            <span
+              className={`text-xs font-semibold tabular-nums ${
+                product.stock > 0 ? "text-slate-500" : "text-rose-600"
+              }`}
+            >
+              {product.stock > 0 ? `库存 ${product.stock}` : "暂时售罄"}
             </span>
           </div>
-          <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-1" />
         </div>
-        <div className="mt-2 rounded border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[12px] font-semibold text-slate-500">
-          库存 {product.stock}
-        </div>
-      </div>
-    </button>
+      </button>
+    </Card>
   );
 }
 
 function ProductTable({
-  categoryName,
   products,
-  searchTerm,
-  onSearchChange,
   onOpen,
 }: {
-  categoryName: string;
   products: ProductRecord[];
-  searchTerm: string;
-  onSearchChange: (value: string) => void;
   onOpen: (product: ProductRecord) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.055)]">
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-xs font-semibold text-slate-500">商品列表</div>
-          <h2 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">
-            {categoryName}
-          </h2>
-        </div>
-        <label className="relative w-full lg:max-w-sm">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            className="h-10 w-full rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-            value={searchTerm}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="搜索商品关键词"
-          />
-        </label>
-      </div>
-
+    <Card className="overflow-hidden bg-white shadow-[0_14px_38px_rgba(15,23,42,0.055)]">
       <div className="p-3 sm:p-4">
         <div className="hidden rounded-t-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_96px_80px_112px]">
           <div>商品</div>
@@ -795,7 +760,7 @@ function ProductTable({
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 

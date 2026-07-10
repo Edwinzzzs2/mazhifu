@@ -4,7 +4,12 @@ import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
 import type { MapayQueryResult } from "@/lib/mapay";
-import { verifyOrderAccessGrant } from "@/lib/order-access";
+import {
+  hashOrderSessionToken,
+  isOrderSessionToken,
+  ORDER_SESSION_TTL_SECONDS,
+} from "@/lib/order-access";
+import { verifyOrderReturnGrant } from "@/lib/order-return-access";
 import type { ProductRecord } from "@/lib/products";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
@@ -40,7 +45,7 @@ export type OrderRecord = {
 
 export type CreatedOrder = {
   order: OrderRecord;
-  access_token: string;
+  return_token: string;
 };
 
 export type OrderView = OrderRecord & {
@@ -119,8 +124,8 @@ function hashAccessToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function tokenMatches(outTradeNo: string, storedHash: string | null, token: string) {
-  if (verifyOrderAccessGrant(outTradeNo, token)) {
+function returnTokenMatches(outTradeNo: string, storedHash: string | null, token: string) {
+  if (verifyOrderReturnGrant(outTradeNo, token)) {
     return true;
   }
 
@@ -138,12 +143,16 @@ export async function createOrder(
   payType: string,
   quantity: number,
   contact: string,
-  queryPassword = "",
+  queryPassword: string,
+  sessionToken: string,
 ): Promise<CreatedOrder> {
   await ensureStoreSchema();
 
   if (queryPassword.length < 8 || queryPassword.length > 64) {
     throw new Error("query password must be 8-64 characters");
+  }
+  if (!isOrderSessionToken(sessionToken)) {
+    throw new Error("invalid order session token");
   }
 
   const safeQuantity = Math.max(1, Math.min(10, Math.trunc(quantity)));
@@ -151,7 +160,8 @@ export async function createOrder(
     throw new Error("product is unavailable");
   }
 
-  const accessToken = crypto.randomBytes(24).toString("base64url");
+  const returnToken = crypto.randomBytes(24).toString("base64url");
+  const sessionHash = hashOrderSessionToken(sessionToken);
   const outTradeNo = createOutTradeNo();
   const money = (Number(product.price) * safeQuantity).toFixed(2);
   const configuredExpires = Number(process.env.ORDER_TTL_MINUTES ?? 15);
@@ -202,11 +212,25 @@ export async function createOrder(
         safeQuantity,
         contact.slice(0, 120),
         payType,
-        hashAccessToken(accessToken),
+        hashAccessToken(returnToken),
         expiresMinutes,
         hashQueryPassword(queryPassword),
         getQueryPasswordLookup(queryPassword),
       ],
+    );
+
+    await client.query(
+      `UPDATE order_access_sessions
+       SET expires_at = NOW() + ($2 * INTERVAL '1 second'), updated_at = NOW()
+       WHERE session_hash = $1`,
+      [sessionHash, ORDER_SESSION_TTL_SECONDS],
+    );
+    await client.query(
+      `INSERT INTO order_access_sessions (session_hash, order_no, expires_at)
+       VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 second'))
+       ON CONFLICT (session_hash, order_no) DO UPDATE
+       SET expires_at = EXCLUDED.expires_at, updated_at = NOW()`,
+      [sessionHash, outTradeNo, ORDER_SESSION_TTL_SECONDS],
     );
 
     const secretIds = lockedSecrets.rows.map((row) => row.id);
@@ -229,7 +253,7 @@ export async function createOrder(
 
     const createdOrder = result.rows[0];
 
-    return { order: createdOrder, access_token: accessToken };
+    return { order: createdOrder, return_token: returnToken };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -258,13 +282,67 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
   return result.rows[0] ?? null;
 }
 
-export async function getOrderWithAccess(outTradeNo: string, accessToken: string) {
+export async function getOrderWithReturnToken(outTradeNo: string, returnToken: string) {
   const order = await getOrderByOutTradeNo(outTradeNo);
-  return order && tokenMatches(outTradeNo, order.status_token_hash, accessToken) ? order : null;
+  return order && returnTokenMatches(outTradeNo, order.status_token_hash, returnToken)
+    ? order
+    : null;
 }
 
-export async function getOrderViewWithAccess(outTradeNo: string, accessToken: string) {
-  const order = await getOrderWithAccess(outTradeNo, accessToken);
+export async function grantOrderSessionAccess(outTradeNo: string, sessionToken: string) {
+  if (!isOrderSessionToken(sessionToken)) return false;
+
+  await ensureStoreSchema();
+  const sessionHash = hashOrderSessionToken(sessionToken);
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE order_access_sessions
+       SET expires_at = NOW() + ($2 * INTERVAL '1 second'), updated_at = NOW()
+       WHERE session_hash = $1`,
+      [sessionHash, ORDER_SESSION_TTL_SECONDS],
+    );
+    const result = await client.query<{ order_no: string }>(
+      `INSERT INTO order_access_sessions (session_hash, order_no, expires_at)
+       SELECT $1, out_trade_no, NOW() + ($3 * INTERVAL '1 second')
+       FROM orders
+       WHERE out_trade_no = $2
+       ON CONFLICT (session_hash, order_no) DO UPDATE
+       SET expires_at = EXCLUDED.expires_at, updated_at = NOW()
+       RETURNING order_no`,
+      [sessionHash, outTradeNo, ORDER_SESSION_TTL_SECONDS],
+    );
+    await client.query("COMMIT");
+    return result.rowCount === 1;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getOrderWithSession(outTradeNo: string, sessionToken: string) {
+  if (!isOrderSessionToken(sessionToken)) return null;
+
+  await ensureStoreSchema();
+  const result = await getPool().query<OrderRecord>(
+    `SELECT orders.*
+     FROM orders
+     INNER JOIN order_access_sessions AS access
+       ON access.order_no = orders.out_trade_no
+     WHERE orders.out_trade_no = $1
+       AND access.session_hash = $2
+       AND access.expires_at > NOW()
+     LIMIT 1`,
+    [outTradeNo, hashOrderSessionToken(sessionToken)],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function getOrderViewWithSession(outTradeNo: string, sessionToken: string) {
+  const order = await getOrderWithSession(outTradeNo, sessionToken);
   if (!order) {
     return null;
   }

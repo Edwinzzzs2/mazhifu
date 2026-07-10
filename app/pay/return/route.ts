@@ -3,10 +3,13 @@ import { parseMapayPayload, verifyMapayPayload } from "@/lib/mapay";
 import { getRequestOrigin } from "@/lib/request-utils";
 import { createLogger } from "@/lib/logger";
 import {
-  getOrderAccessCookieName,
-  orderAccessCookieOptions,
+  createOrderSessionToken,
+  getLegacyOrderCookieNames,
+  getOrderSessionCookieName,
+  getOrderSessionTokenFromRequest,
+  orderSessionCookieOptions,
 } from "@/lib/order-access";
-import { getOrderWithAccess } from "@/lib/orders";
+import { grantOrderSessionAccess, getOrderWithReturnToken } from "@/lib/orders";
 
 const logger = createLogger("mapay:return");
 
@@ -20,11 +23,16 @@ export async function GET(request: Request) {
 
   const outTradeNo = payload.out_trade_no;
   const callbackSignatureValid = verifyMapayPayload(payload);
-  const accessState = callbackSignatureValid ? payload.param ?? "" : "";
-  const accessibleOrder = outTradeNo && accessState
-    ? await getOrderWithAccess(outTradeNo, accessState)
+  const returnToken = callbackSignatureValid ? payload.param ?? "" : "";
+  const accessibleOrder = outTradeNo && returnToken
+    ? await getOrderWithReturnToken(outTradeNo, returnToken)
     : null;
-  const validState = Boolean(accessibleOrder);
+  const sessionToken = getOrderSessionTokenFromRequest(request) || createOrderSessionToken();
+  const validState = Boolean(
+    accessibleOrder
+    && outTradeNo
+    && await grantOrderSessionAccess(outTradeNo, sessionToken)
+  );
   const origin = getRequestOrigin();
   
   const redirectUrl = new URL(
@@ -45,10 +53,13 @@ export async function GET(request: Request) {
   const response = NextResponse.redirect(redirectUrl, { status: 303 });
   if (outTradeNo && validState) {
     response.cookies.set(
-      getOrderAccessCookieName(outTradeNo),
-      accessState,
-      orderAccessCookieOptions,
+      getOrderSessionCookieName(),
+      sessionToken,
+      orderSessionCookieOptions,
     );
+  }
+  for (const cookieName of new Set(getLegacyOrderCookieNames(request))) {
+    response.cookies.set(cookieName, "", { ...orderSessionCookieOptions, maxAge: 0 });
   }
   return response;
 }

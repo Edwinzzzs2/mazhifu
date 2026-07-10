@@ -5,7 +5,12 @@ import { scheduleOrderExpiration } from "@/lib/order-expiration-scheduler";
 import { getProductById } from "@/lib/products";
 import { getRequestOrigin } from "@/lib/request-utils";
 import { createLogger } from "@/lib/logger";
-import { getOrderAccessCookieName, orderAccessCookieOptions } from "@/lib/order-access";
+import {
+  getLegacyOrderCookieNames,
+  getOrderSessionCookieName,
+  getOrCreateOrderSessionToken,
+  orderSessionCookieOptions,
+} from "@/lib/order-access";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 const PAY_TYPES = new Set(["alipay", "wxpay"]);
@@ -57,7 +62,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "参数错误" }, { status: 400 });
     }
 
-    const created = await createOrder(product, payType, quantity, normalizedContact, queryPassword);
+    const sessionToken = getOrCreateOrderSessionToken(request);
+    const created = await createOrder(
+      product,
+      payType,
+      quantity,
+      normalizedContact,
+      queryPassword,
+      sessionToken,
+    );
     await scheduleOrderExpiration(created.order);
 
     const origin = getRequestOrigin();
@@ -66,7 +79,7 @@ export async function POST(request: Request) {
       order: created.order,
       pay_type: payType,
       request_origin: origin,
-      access_token: created.access_token,
+      return_token: created.return_token,
     };
 
     // 前台用户支付走 Submit 网关页，避免直接打开 MAPI 返回的 qrcode/urlscheme/第三方渲染页。
@@ -95,10 +108,13 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json(responsePayload);
     response.cookies.set(
-      getOrderAccessCookieName(created.order.out_trade_no),
-      created.access_token,
-      orderAccessCookieOptions,
+      getOrderSessionCookieName(),
+      sessionToken,
+      orderSessionCookieOptions,
     );
+    for (const cookieName of new Set(getLegacyOrderCookieNames(request))) {
+      response.cookies.set(cookieName, "", { ...orderSessionCookieOptions, maxAge: 0 });
+    }
     return response;
   } catch (error) {
     logger.error("failed", { error });

@@ -90,47 +90,6 @@ textarea {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   }
 
-  .category-button {
-    display: grid;
-    grid-template-columns: 18px 1fr auto;
-    align-items: center;
-    width: 100%;
-    min-height: 44px;
-    gap: 10px;
-    border-radius: 8px;
-    padding: 0 12px;
-    color: rgb(71 85 105);
-    font-size: 14px;
-    font-weight: 650;
-    text-align: left;
-    transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-  }
-
-  .category-button:hover {
-    background: rgb(240 249 255);
-    color: rgb(2 132 199);
-  }
-
-  .category-button.is-active {
-    background: linear-gradient(135deg, rgb(2 132 199), rgb(14 165 233));
-    color: white;
-    box-shadow: 0 10px 22px rgba(14, 165, 233, 0.20);
-  }
-
-  .category-button span {
-    display: grid;
-    min-width: 26px;
-    height: 24px;
-    place-items: center;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.18);
-    font-size: 12px;
-  }
-
-  .category-button.is-active span {
-    background: rgba(255, 255, 255, 0.22);
-  }
-
   .product-card {
     overflow: hidden;
     min-height: 0;

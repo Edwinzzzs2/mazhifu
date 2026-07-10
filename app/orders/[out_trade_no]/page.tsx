@@ -4,8 +4,8 @@ import { ArrowLeft, CheckCircle2, Clock3, Home, ReceiptText } from "lucide-react
 import { OrderStatusPanel } from "@/components/order-status-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getOrderViewWithAccess } from "@/lib/orders";
-import { getOrderAccessToken } from "@/lib/order-access";
+import { getOrderViewWithSession } from "@/lib/orders";
+import { getOrderSessionToken } from "@/lib/order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,8 @@ type OrderPageProps = {
 };
 
 export default async function OrderPage({ params }: OrderPageProps) {
-  const accessToken = getOrderAccessToken(params.out_trade_no);
-  const order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
+  const sessionToken = getOrderSessionToken();
+  const order = await getOrderViewWithSession(params.out_trade_no, sessionToken);
 
   if (!order) {
     redirect(`/orders/query?order=${encodeURIComponent(params.out_trade_no)}`);

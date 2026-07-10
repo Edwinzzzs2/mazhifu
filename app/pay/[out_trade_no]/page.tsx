@@ -12,8 +12,8 @@ import { OrderStatusPanel } from "@/components/order-status-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
-import { getOrderViewWithAccess } from "@/lib/orders";
-import { getOrderAccessToken } from "@/lib/order-access";
+import { getOrderViewWithSession } from "@/lib/orders";
+import { getOrderSessionToken } from "@/lib/order-access";
 import { getRequestOrigin } from "@/lib/request-utils";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,8 @@ type PayPageProps = {
 };
 
 export default async function PayPage({ params }: PayPageProps) {
-  const accessToken = getOrderAccessToken(params.out_trade_no);
-  const order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
+  const sessionToken = getOrderSessionToken();
+  const order = await getOrderViewWithSession(params.out_trade_no, sessionToken);
 
   if (!order) {
     notFound();
@@ -40,7 +40,6 @@ export default async function PayPage({ params }: PayPageProps) {
       order,
       pay_type: order.pay_type,
       request_origin: getRequestOrigin(),
-      access_token: accessToken,
     });
   } catch {
     configError = "支付配置未就绪，请检查 MAPAY_PID、MAPAY_KEY 和通道配置。";

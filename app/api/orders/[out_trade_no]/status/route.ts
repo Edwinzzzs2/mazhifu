@@ -3,10 +3,10 @@ import { createLogger } from "@/lib/logger";
 import {
   getOrderViewByQueryAuth,
   getOrderViewInternal,
-  getOrderViewWithAccess,
+  getOrderViewWithSession,
   retryOrderFulfillment,
 } from "@/lib/orders";
-import { getOrderAccessTokenFromRequest } from "@/lib/order-access";
+import { getOrderSessionTokenFromRequest } from "@/lib/order-access";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 const logger = createLogger("orders:status");
@@ -75,12 +75,12 @@ async function getStatusResponse(
     );
   }
 
-  const accessToken = queryAuth
+  const sessionToken = queryAuth
     ? ""
-    : getOrderAccessTokenFromRequest(request, params.out_trade_no);
+    : getOrderSessionTokenFromRequest(request);
   let order = queryAuth
     ? await getOrderViewByQueryAuth(params.out_trade_no, queryAuth.email, queryAuth.password)
-    : await getOrderViewWithAccess(params.out_trade_no, accessToken);
+    : await getOrderViewWithSession(params.out_trade_no, sessionToken);
 
   if (!order) {
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
