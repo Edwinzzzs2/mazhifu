@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { getDeliverySecrets } from "@/lib/card-secrets";
 import { getPool } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
-import type { MapayPayload, MapayQueryResult } from "@/lib/mapay";
+import type { MapayQueryResult } from "@/lib/mapay";
 import type { ProductRecord } from "@/lib/products";
 import { ensureStoreSchema } from "@/lib/store-schema";
 
@@ -34,6 +34,7 @@ export type OrderRecord = {
   paid_at: string | null;
   fulfilled_at: string | null;
   query_password_hash: string | null;
+  query_password_lookup: string | null;
 };
 
 export type CreatedOrder = {
@@ -45,9 +46,67 @@ export type OrderView = OrderRecord & {
   delivery_content: string[];
 };
 
+function getQueryPasswordPepper() {
+  const pepper = process.env.ORDER_QUERY_PASSWORD_PEPPER ?? "";
+  const invalid = !pepper || pepper.startsWith("replace_with_") || pepper.length < 32;
+  if (invalid && process.env.NODE_ENV === "production") {
+    throw new Error("ORDER_QUERY_PASSWORD_PEPPER must be at least 32 characters");
+  }
+  return invalid ? "mazhifu-development-query-password-pepper" : pepper;
+}
+
+function getQueryPasswordLookup(password: string) {
+  return crypto
+    .createHmac("sha256", getQueryPasswordPepper())
+    .update(password)
+    .digest("hex");
+}
+
 function hashQueryPassword(password: string): string | null {
   if (!password) return null;
-  return crypto.createHash("sha256").update(password).digest("hex");
+  const salt = crypto.randomBytes(16).toString("base64url");
+  const hash = crypto.scryptSync(password, salt, 64).toString("base64url");
+  return `scrypt$${salt}$${hash}`;
+}
+
+function safeEqualText(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isLegacyQueryPasswordHash(value: string | null) {
+  return Boolean(value && /^[a-f0-9]{64}$/i.test(value));
+}
+
+function verifyQueryPassword(password: string, storedHash: string | null) {
+  if (!password || !storedHash) return false;
+  if (isLegacyQueryPasswordHash(storedHash)) {
+    const legacyHash = crypto.createHash("sha256").update(password).digest("hex");
+    return safeEqualText(legacyHash, storedHash);
+  }
+
+  const [version, salt, expectedHash] = storedHash.split("$");
+  if (version !== "scrypt" || !salt || !expectedHash) return false;
+  const actualHash = crypto.scryptSync(password, salt, 64).toString("base64url");
+  return safeEqualText(actualHash, expectedHash);
+}
+
+async function upgradeLegacyQueryPassword(order: OrderRecord, password: string) {
+  if (!isLegacyQueryPasswordHash(order.query_password_hash)) return;
+
+  // 仅在旧哈希仍未变化时升级，避免并发查询覆盖其他请求已经写入的新值。
+  await getPool().query(
+    `UPDATE orders
+     SET query_password_hash = $2, query_password_lookup = $3
+     WHERE out_trade_no = $1 AND query_password_hash = $4`,
+    [
+      order.out_trade_no,
+      hashQueryPassword(password),
+      getQueryPasswordLookup(password),
+      order.query_password_hash,
+    ],
+  );
 }
 
 function createOutTradeNo() {
@@ -77,6 +136,10 @@ export async function createOrder(
   queryPassword = "",
 ): Promise<CreatedOrder> {
   await ensureStoreSchema();
+
+  if (queryPassword.length < 8 || queryPassword.length > 64) {
+    throw new Error("query password must be 8-64 characters");
+  }
 
   const safeQuantity = Math.max(1, Math.min(10, Math.trunc(quantity)));
   if (!product.active || product.stock < safeQuantity) {
@@ -116,12 +179,12 @@ export async function createOrder(
         INSERT INTO orders (
           out_trade_no, product_id, product_name, money, unit_price,
           quantity, contact, pay_type, status_token_hash, expires_at,
-          query_password_hash
+          query_password_hash, query_password_lookup
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9,
           NOW() + ($10 * INTERVAL '1 minute'),
-          $11
+          $11, $12
         )
         RETURNING *
       `,
@@ -137,6 +200,7 @@ export async function createOrder(
         hashAccessToken(accessToken),
         expiresMinutes,
         hashQueryPassword(queryPassword),
+        getQueryPasswordLookup(queryPassword),
       ],
     );
 
@@ -207,34 +271,6 @@ export async function getOrderViewWithAccess(outTradeNo: string, accessToken: st
   } satisfies OrderView;
 }
 
-export async function getOrderViewByEmail(outTradeNo: string, email: string) {
-  const normalizedEmail = email.trim().toLowerCase();
-  if (!outTradeNo || !normalizedEmail) return null;
-
-  const result = await getPool().query<OrderRecord>(
-    "SELECT * FROM orders WHERE out_trade_no = $1",
-    [outTradeNo],
-  );
-  const order = result.rows[0];
-  if (!order) return null;
-
-  // 用邮箱与下单时的 contact 做大小写不敏感匹配
-  if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
-
-  const refreshed = await getPool().query<OrderRecord>(
-    "SELECT * FROM orders WHERE out_trade_no = $1",
-    [outTradeNo],
-  );
-  const refreshedOrder = refreshed.rows[0] ?? order;
-
-  const deliveryContent =
-    refreshedOrder.status === "paid" ? await getDeliverySecrets(outTradeNo) : [];
-  return {
-    ...refreshedOrder,
-    delivery_content: deliveryContent,
-  } satisfies OrderView;
-}
-
 export async function getOrderViewByQueryAuth(
   outTradeNo: string,
   email: string,
@@ -252,8 +288,8 @@ export async function getOrderViewByQueryAuth(
 
   if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
 
-  const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
-  if (!order.query_password_hash || order.query_password_hash !== inputHash) return null;
+  if (!verifyQueryPassword(queryPassword, order.query_password_hash)) return null;
+  await upgradeLegacyQueryPassword(order, queryPassword);
 
   const refreshed = await getPool().query<OrderRecord>(
     "SELECT * FROM orders WHERE out_trade_no = $1",
@@ -284,18 +320,22 @@ export async function listOrdersByQueryAuth(
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !queryPassword) return [];
 
-  const inputHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
+  const lookup = getQueryPasswordLookup(queryPassword);
+  const legacyHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
 
   const result = await getPool().query<OrderRecord>(
     `SELECT * FROM orders
-     WHERE LOWER(contact) = $1 AND query_password_hash = $2
+     WHERE LOWER(contact) = $1
+       AND (query_password_lookup = $2 OR query_password_hash = $3)
      ORDER BY created_at DESC
      LIMIT 20`,
-    [normalizedEmail, inputHash],
+    [normalizedEmail, lookup, legacyHash],
   );
 
   const views: OrderView[] = [];
   for (const order of result.rows) {
+    if (!verifyQueryPassword(queryPassword, order.query_password_hash)) continue;
+    await upgradeLegacyQueryPassword(order, queryPassword);
     const deliveryContent =
       order.status === "paid" ? await getDeliverySecrets(order.out_trade_no) : [];
     views.push({ ...order, delivery_content: deliveryContent } satisfies OrderView);
@@ -437,7 +477,6 @@ async function markOrderPaid(
         trade_no: tradeNo,
         order_found: Boolean(order),
         expected_money: order?.money,
-        raw_payload: rawPayload,
       });
       await client.query("ROLLBACK");
       return false;
@@ -455,7 +494,6 @@ async function markOrderPaid(
           source,
           trade_no: tradeNo,
           duplicate_out_trade_no: duplicate.rows[0]?.out_trade_no,
-          raw_payload: rawPayload,
         });
         await client.query("ROLLBACK");
         return false;
@@ -497,7 +535,6 @@ async function markOrderPaid(
         quantity: order.quantity,
         delivered,
         fulfillment_status: delivered ? "delivered" : "failed",
-        raw_payload: rawPayload,
       });
     } else if (source === "query") {
       await client.query(
@@ -514,7 +551,6 @@ async function markOrderPaid(
         trade_no: tradeNo,
         existing_status: order.status,
         fulfillment_status: order.fulfillment_status,
-        raw_payload: rawPayload,
       });
     } else {
       paymentLogger.info("duplicate paid callback accepted", {
@@ -523,7 +559,6 @@ async function markOrderPaid(
         trade_no: tradeNo,
         existing_status: order.status,
         fulfillment_status: order.fulfillment_status,
-        raw_payload: rawPayload,
       });
     }
 
@@ -537,38 +572,21 @@ async function markOrderPaid(
   }
 }
 
-export async function markOrderFromPayment(payload: MapayPayload) {
-  if (
-    payload.trade_status !== "TRADE_SUCCESS" ||
-    !payload.out_trade_no ||
-    !payload.money
-  ) {
-    paymentLogger.warn("ignored notify payload", {
-      reason: "invalid notify status or missing fields",
-      payload,
-    });
-    return false;
-  }
-
-  return markOrderPaid(
-    payload.out_trade_no,
-    payload.money,
-    payload.trade_no || null,
-    payload,
-    "notify",
-  );
-}
-
-export async function markOrderFromQuery(result: MapayQueryResult) {
+export async function markOrderFromQuery(result: MapayQueryResult, expectedOutTradeNo: string) {
   if (
     Number(result.code) !== 1 ||
     Number(result.status) !== 1 ||
-    !result.out_trade_no ||
+    result.out_trade_no !== expectedOutTradeNo ||
+    String(result.pid) !== String(process.env.MAPAY_PID) ||
     !result.money
   ) {
     paymentLogger.warn("ignored query result", {
       reason: "invalid query status or missing fields",
-      result,
+      out_trade_no: result.out_trade_no ?? null,
+      code: result.code,
+      status: result.status ?? null,
+      expected_out_trade_no: expectedOutTradeNo,
+      pid_matches: String(result.pid) === String(process.env.MAPAY_PID),
     });
     return false;
   }
@@ -611,7 +629,8 @@ export async function recordOrderQuery(outTradeNo: string, result: MapayQueryRes
     out_trade_no: outTradeNo,
     trade_no: tradeNo,
     row_count: updateResult.rowCount,
-    result,
+    code: result.code,
+    status: result.status ?? null,
   });
 }
 

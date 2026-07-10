@@ -13,10 +13,18 @@ const SENSITIVE_KEYS = new Set([
   "access_token",
   "authorization",
   "cookie",
+  "headers",
   "key",
   "password",
+  "password_hash",
   "query_password",
+  "query_password_hash",
   "querypassword",
+  "raw_body",
+  "raw_payload",
+  "raw_query",
+  "secret",
+  "secret_ciphertext",
   "set-cookie",
   "sign",
   "status_token_hash",
@@ -24,7 +32,10 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 function isSensitiveKey(key: string) {
-  const normalized = key.toLowerCase().replace(/[-\s]/g, "_");
+  const normalized = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[-\s]/g, "_");
   return SENSITIVE_KEYS.has(normalized) || normalized.endsWith("_token");
 }
 

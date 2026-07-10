@@ -136,7 +136,6 @@ export function Storefront({
         pay_url?: string;
         pay_type?: string;
         out_trade_no?: string;
-        access_token?: string;
         message?: string;
       };
 
@@ -521,7 +520,7 @@ export function Storefront({
                       <input
                         type="password"
                         required
-                        minLength={4}
+                        minLength={8}
                         maxLength={64}
                         placeholder="自定义密码，用于查询订单状态"
                         value={queryPassword}
@@ -819,8 +818,16 @@ function OrderTrackingModal({
     if (fetchingRef.current) return;  // 上一个还没返回，跳过
     fetchingRef.current = true;
     try {
-      const url = `/api/orders/${encodeURIComponent(info.out_trade_no)}/status?contactinfo=${encodeURIComponent(info.email)}&queryPassword=${encodeURIComponent(info.queryPassword)}`;
-      const resp = await fetch(url, { cache: "no-store" });
+      const url = `/api/orders/${encodeURIComponent(info.out_trade_no)}/status`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: info.email,
+          query_password: info.queryPassword,
+        }),
+        cache: "no-store",
+      });
       if (resp.ok) {
         const data = (await resp.json()) as RemoteOrderStatus;
         setOrder(data);

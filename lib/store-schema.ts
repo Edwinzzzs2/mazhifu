@@ -63,6 +63,7 @@ async function initializeStoreSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfillment_status TEXT NOT NULL DEFAULT 'pending';
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilled_at TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS query_password_hash TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS query_password_lookup TEXT;
 
     UPDATE orders SET unit_price = money WHERE unit_price IS NULL;
     UPDATE orders SET expires_at = created_at + INTERVAL '15 minutes' WHERE expires_at IS NULL;
@@ -117,6 +118,8 @@ async function initializeStoreSchema() {
     CREATE INDEX IF NOT EXISTS orders_pending_expires_at_idx
       ON orders (expires_at)
       WHERE status = 'pending' AND paid_at IS NULL;
+    CREATE INDEX IF NOT EXISTS orders_contact_query_lookup_idx
+      ON orders (LOWER(contact), query_password_lookup, created_at DESC);
     CREATE INDEX IF NOT EXISTS products_category_active_idx
       ON products (category_id, active);
     CREATE UNIQUE INDEX IF NOT EXISTS card_secrets_product_hash_unique

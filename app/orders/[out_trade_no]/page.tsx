@@ -5,6 +5,7 @@ import { OrderStatusPanel } from "@/components/order-status-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getOrderViewWithAccess } from "@/lib/orders";
+import { getOrderAccessToken } from "@/lib/order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,10 @@ type OrderPageProps = {
   params: {
     out_trade_no: string;
   };
-  searchParams?: {
-    token?: string;
-  };
 };
 
-export default async function OrderPage({ params, searchParams }: OrderPageProps) {
-  const accessToken = searchParams?.token ?? "";
+export default async function OrderPage({ params }: OrderPageProps) {
+  const accessToken = getOrderAccessToken(params.out_trade_no);
   const order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
 
   if (!order) {
@@ -26,11 +24,7 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
   }
 
   const paid = order.status === "paid";
-  const payHref =
-    "/pay/" +
-    encodeURIComponent(order.out_trade_no) +
-    "?token=" +
-    encodeURIComponent(accessToken);
+  const payHref = "/pay/" + encodeURIComponent(order.out_trade_no);
 
   return (
     <main className="page-shell px-3 py-5 sm:px-4 sm:py-8">
@@ -91,7 +85,7 @@ export default async function OrderPage({ params, searchParams }: OrderPageProps
               <ReceiptText className="h-4 w-4 text-sky-500" />
               订单状态
             </div>
-            <OrderStatusPanel initial_order={order} access_token={accessToken} />
+            <OrderStatusPanel initial_order={order} />
           </aside>
         </div>
       </section>

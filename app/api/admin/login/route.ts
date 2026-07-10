@@ -8,6 +8,7 @@ import {
   needsAdminSetup,
 } from "@/lib/admin-auth";
 import { getRequestOrigin } from "@/lib/request-utils";
+import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 function wantsJson(request: Request) {
   return request.headers.get("accept")?.includes("application/json") ||
@@ -35,6 +36,29 @@ export async function POST(request: Request) {
   try {
     const { username, password } = await readLoginInput(request);
     const origin = getRequestOrigin();
+    const rateLimit = await checkRateLimits([
+      {
+        scope: "admin-login:client",
+        identifier: getClientRateLimitKey(request),
+        limit: 12,
+        windowSeconds: 600,
+      },
+      {
+        scope: "admin-login:username",
+        identifier: username.trim().toLowerCase(),
+        limit: 6,
+        windowSeconds: 600,
+      },
+    ]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { message: rateLimit.unavailable ? "安全服务暂不可用" : "登录尝试过于频繁，请稍后重试" },
+        {
+          status: rateLimit.unavailable ? 503 : 429,
+          headers: { "Retry-After": String(rateLimit.retryAfter) },
+        },
+      );
+    }
 
     if (await needsAdminSetup()) {
       if (json) {

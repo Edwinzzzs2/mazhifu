@@ -336,19 +336,27 @@ export default function QueryOrderPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !queryPassword.trim()) return;
+    if (!email.trim() || !queryPassword) return;
     setLoading(true);
     setError("");
     setQueried(true);
 
     try {
-      const url = `/api/orders/query?email=${encodeURIComponent(email.trim())}&query_password=${encodeURIComponent(queryPassword.trim())}`;
-      const resp = await fetch(url, { cache: "no-store" });
+      const resp = await fetch("/api/orders/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          query_password: queryPassword,
+        }),
+        cache: "no-store",
+      });
+      const data = (await resp.json()) as { orders?: OrderSummary[]; message?: string };
       if (!resp.ok) {
+        setError(data.message ?? "查询失败，请稍后重试");
         setOrders([]);
         return;
       }
-      const data = (await resp.json()) as { orders: OrderSummary[] };
       setOrders(data.orders ?? []);
     } catch {
       setError("网络错误，请稍后重试");

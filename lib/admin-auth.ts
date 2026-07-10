@@ -59,13 +59,15 @@ export const adminRefreshCookieOptions = {
 };
 
 function getTokenSecret() {
-  const secret = process.env.CARD_SECRET_ENCRYPTION_KEY || process.env.MAPAY_KEY;
+  const secret = process.env.ADMIN_SESSION_SECRET ?? "";
+  const invalid = !secret || secret.startsWith("replace_with_") || secret.length < 32;
 
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("CARD_SECRET_ENCRYPTION_KEY is required for auth tokens");
+  // 管理员会话必须使用独立密钥，避免支付或卡密密钥泄露后可伪造后台令牌。
+  if (invalid && process.env.NODE_ENV === "production") {
+    throw new Error("ADMIN_SESSION_SECRET must be at least 32 characters");
   }
 
-  return secret || "mazhifu-development-token-secret";
+  return invalid ? "mazhifu-development-admin-session-secret" : secret;
 }
 
 function base64UrlEncode(value: string | Buffer) {
@@ -139,8 +141,8 @@ export function validateWritableUsername(username: string) {
 }
 
 export function validatePassword(password: string) {
-  if (!password) {
-    throw new Error("密码不能为空");
+  if (password.length < 8 || password.length > 128) {
+    throw new Error("密码需为 8-128 位字符");
   }
 }
 

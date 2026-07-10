@@ -6,6 +6,7 @@ import {
   registerPublicUser,
 } from "@/lib/admin-auth";
 import { getRequestOrigin } from "@/lib/request-utils";
+import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 function wantsJson(request: Request) {
   return request.headers.get("accept")?.includes("application/json") ||
@@ -35,7 +36,32 @@ export async function POST(request: Request) {
   const json = wantsJson(request);
 
   try {
-    const user = await registerPublicUser(await readSignupInput(request));
+    const input = await readSignupInput(request);
+    const rateLimit = await checkRateLimits([
+      {
+        scope: "admin-signup:client",
+        identifier: getClientRateLimitKey(request),
+        limit: 8,
+        windowSeconds: 3600,
+      },
+      {
+        scope: "admin-signup:username",
+        identifier: input.username.trim().toLowerCase(),
+        limit: 3,
+        windowSeconds: 3600,
+      },
+    ]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { message: rateLimit.unavailable ? "安全服务暂不可用" : "注册尝试过于频繁，请稍后重试" },
+        {
+          status: rateLimit.unavailable ? 503 : 429,
+          headers: { "Retry-After": String(rateLimit.retryAfter) },
+        },
+      );
+    }
+
+    const user = await registerPublicUser(input);
 
     if (user.role !== "ADMIN") {
       if (json) {

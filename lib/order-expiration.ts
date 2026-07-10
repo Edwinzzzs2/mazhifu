@@ -13,7 +13,7 @@ async function reconcileMapayBeforeExpire(outTradeNo: string) {
     });
 
     const queryResult = await queryMapayOrder(outTradeNo);
-    const markedPaid = await markOrderFromQuery(queryResult);
+    const markedPaid = await markOrderFromQuery(queryResult, outTradeNo);
 
     logger.info("mapay query handled", {
       out_trade_no: outTradeNo,
@@ -21,7 +21,6 @@ async function reconcileMapayBeforeExpire(outTradeNo: string) {
       trade_no: queryResult.trade_no || null,
       status: queryResult.status ?? null,
       code: queryResult.code ?? null,
-      result: queryResult,
     });
 
     if (markedPaid) {

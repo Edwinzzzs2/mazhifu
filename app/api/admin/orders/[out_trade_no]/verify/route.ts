@@ -51,7 +51,7 @@ export async function POST(
   } catch (err) {
     const message = isAbortError(err) ? "码支付查询超时" : "码支付查询失败";
     logger.error(message, { error: err });
-    return NextResponse.json({ message, error: String(err) }, { status: 502 });
+    return NextResponse.json({ message }, { status: 502 });
   }
 
   // 3. 保存查询响应，并在本地订单还没有平台流水号时补绑定。
@@ -60,11 +60,16 @@ export async function POST(
   logger.info("mapay query result recorded", {
     out_trade_no,
     trade_no: tradeNo,
-    query_result: queryResult,
+    code: queryResult.code,
+    status: queryResult.status ?? null,
   });
 
   // 4. 判断支付状态
-  const isPaid = Number(queryResult.code) === 1 && Number(queryResult.status) === 1;
+  const isPaid =
+    Number(queryResult.code) === 1 &&
+    Number(queryResult.status) === 1 &&
+    queryResult.out_trade_no === out_trade_no &&
+    String(queryResult.pid) === String(process.env.MAPAY_PID);
   const ttlMinutes = Number(process.env.ORDER_TTL_MINUTES ?? 15);
   const orderAgeMs = Date.now() - new Date(order.created_at).getTime();
   const isExpired = orderAgeMs > ttlMinutes * 60 * 1000;
@@ -74,17 +79,21 @@ export async function POST(
 
   if (isPaid) {
     // 查询到已支付 → 标记支付并尝试发货
-    if (order.status !== "paid") {
-      await markOrderFromQuery(queryResult);
+    const accepted = order.status === "paid"
+      || await markOrderFromQuery(queryResult, out_trade_no);
+    if (!accepted) {
+      action = "payment_mismatch";
+      newStatus = order.status;
+    } else {
+      // 只有订单号、商户号和金额都校验通过后才允许补发货。
+      try {
+        await retryOrderFulfillment(out_trade_no);
+      } catch (err) {
+        logger.error("fulfill failed", { error: err });
+      }
+      action = "marked_paid";
+      newStatus = "paid";
     }
-    // 补发货
-    try {
-      await retryOrderFulfillment(out_trade_no);
-    } catch (err) {
-      logger.error("fulfill failed", { error: err });
-    }
-    action = "marked_paid";
-    newStatus = "paid";
   } else if (isExpired && order.status === "pending") {
     // 超过 TTL 且未支付 → 标记过期
     await expireSingleOrder(out_trade_no);
@@ -109,7 +118,12 @@ export async function POST(
     order: updatedResult.rows[0],
   };
 
-  logger.info("response", responsePayload);
+  logger.info("response", {
+    out_trade_no,
+    action,
+    new_status: newStatus,
+    trade_no: tradeNo,
+  });
 
   return NextResponse.json(responsePayload);
 }

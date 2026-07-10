@@ -21,13 +21,11 @@ type OrderStatus = {
 
 type OrderStatusPanelProps = {
   initial_order: OrderStatus;
-  access_token: string;
   compact?: boolean;
 };
 
 export function OrderStatusPanel({
   initial_order,
-  access_token,
   compact = false,
 }: OrderStatusPanelProps) {
   const [order, setOrder] = useState(initial_order);
@@ -38,9 +36,7 @@ export function OrderStatusPanel({
     setRefreshing(true);
     try {
       const response = await fetch(
-        `/api/orders/${encodeURIComponent(order.out_trade_no)}/status?token=${encodeURIComponent(
-          access_token,
-        )}`,
+        `/api/orders/${encodeURIComponent(order.out_trade_no)}/status`,
         { cache: "no-store" },
       );
       if (response.ok) {
@@ -49,7 +45,7 @@ export function OrderStatusPanel({
     } finally {
       setRefreshing(false);
     }
-  }, [access_token, order.out_trade_no]);
+  }, [order.out_trade_no]);
 
   useEffect(() => {
     const shouldPoll =

@@ -6,6 +6,8 @@ import {
   getOrderViewWithAccess,
   retryOrderFulfillment,
 } from "@/lib/orders";
+import { getOrderAccessTokenFromRequest } from "@/lib/order-access";
+import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 const logger = createLogger("orders:status");
 
@@ -42,17 +44,43 @@ function formatOrderResponse(order: NonNullable<Awaited<ReturnType<typeof getOrd
  *
  * 本接口不主动调用码支付 API，避免不必要的外部请求。
  */
-export async function GET(request: Request, { params }: StatusRouteContext) {
-  const url = new URL(request.url);
-  const accessToken = url.searchParams.get("token") ?? "";
-  const contactinfo = url.searchParams.get("contactinfo") ?? "";
-  const queryPassword = url.searchParams.get("queryPassword") ?? "";
+async function getStatusResponse(
+  request: Request,
+  params: StatusRouteContext["params"],
+  queryAuth?: { email: string; password: string },
+) {
+  const clientKey = getClientRateLimitKey(request);
+  const rules = [{
+    scope: "order-status:client",
+    identifier: clientKey,
+    limit: queryAuth ? 30 : 120,
+    windowSeconds: 60,
+  }];
+  if (queryAuth) {
+    rules.push({
+      scope: "order-status:query-auth",
+      identifier: `${params.out_trade_no}:${queryAuth.email.toLowerCase()}`,
+      limit: 8,
+      windowSeconds: 600,
+    });
+  }
+  const rateLimit = await checkRateLimits(rules);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { message: rateLimit.unavailable ? "security_service_unavailable" : "too_many_requests" },
+      {
+        status: rateLimit.unavailable ? 503 : 429,
+        headers: { "Retry-After": String(rateLimit.retryAfter) },
+      },
+    );
+  }
 
-  let order = accessToken
-    ? await getOrderViewWithAccess(params.out_trade_no, accessToken)
-    : contactinfo && queryPassword
-      ? await getOrderViewByQueryAuth(params.out_trade_no, contactinfo, queryPassword)
-      : null;
+  const accessToken = queryAuth
+    ? ""
+    : getOrderAccessTokenFromRequest(request, params.out_trade_no);
+  let order = queryAuth
+    ? await getOrderViewByQueryAuth(params.out_trade_no, queryAuth.email, queryAuth.password)
+    : await getOrderViewWithAccess(params.out_trade_no, accessToken);
 
   if (!order) {
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
@@ -71,5 +99,24 @@ export async function GET(request: Request, { params }: StatusRouteContext) {
     }
   }
 
-  return NextResponse.json(formatOrderResponse(order));
+  return NextResponse.json(formatOrderResponse(order), {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+export async function GET(request: Request, { params }: StatusRouteContext) {
+  return getStatusResponse(request, params);
+}
+
+export async function POST(request: Request, { params }: StatusRouteContext) {
+  const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!payload) {
+    return NextResponse.json({ message: "invalid_query_auth" }, { status: 400 });
+  }
+  const email = String(payload.email ?? "").trim().toLowerCase();
+  const password = String(payload.query_password ?? "");
+  if (!email || email.length > 120 || !password || password.length > 64) {
+    return NextResponse.json({ message: "invalid_query_auth" }, { status: 400 });
+  }
+  return getStatusResponse(request, params, { email, password });
 }

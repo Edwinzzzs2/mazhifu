@@ -344,6 +344,8 @@ export function AdminSiteSettings({
                 <input
                   className="admin-input bg-white"
                   type="password"
+                  minLength={8}
+                  maxLength={128}
                   value={userForm.password}
                   onChange={(event) => updateUserForm("password", event.target.value)}
                   placeholder="新用户密码"
@@ -398,6 +400,8 @@ export function AdminSiteSettings({
                       <input
                         className="admin-input bg-white"
                         type="password"
+                        minLength={8}
+                        maxLength={128}
                         value={draft.password}
                         placeholder="留空不修改"
                         onChange={(event) => updateUserDraft(user.id, "password", event.target.value)}

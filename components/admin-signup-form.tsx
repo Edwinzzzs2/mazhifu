@@ -63,6 +63,8 @@ export function AdminSignupForm({ initial_error, setup_required }: AdminSignupFo
           name="password"
           type="password"
           autoComplete="new-password"
+          minLength={8}
+          maxLength={128}
           placeholder="请输入密码"
           required
         />

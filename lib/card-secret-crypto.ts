@@ -1,10 +1,15 @@
 import crypto from "crypto";
 
 function getSecretMaterial() {
-  const material = process.env.CARD_SECRET_ENCRYPTION_KEY || process.env.MAPAY_KEY;
+  const material = process.env.CARD_SECRET_ENCRYPTION_KEY ?? "";
+  const invalid =
+    !material ||
+    material.startsWith("replace_with_") ||
+    material === "change_me_to_a_stable_long_random_string" ||
+    material.length < 32;
 
-  if (!material) {
-    throw new Error("CARD_SECRET_ENCRYPTION_KEY is required");
+  if (invalid) {
+    throw new Error("CARD_SECRET_ENCRYPTION_KEY must be a unique secret of at least 32 characters");
   }
 
   return material;

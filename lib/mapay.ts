@@ -22,14 +22,6 @@ export type MapayQueryResult = {
 export const MAPAY_QUERY_TIMEOUT_MS = 8000;
 const logger = createLogger("mapay");
 
-export type MapayRequestSnapshot = {
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  raw_query: string;
-  raw_body: string;
-};
-
 export function isAbortError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -49,47 +41,12 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
-function getAppUrl(requestOrigin: string) {
-  const appUrl = process.env.APP_URL ?? "";
-  // 跳过 localhost 配置，使用请求来源
-  if (appUrl && !appUrl.includes("localhost") && !appUrl.includes("127.0.0.1")) {
-    return appUrl.replace(/\/+$/, "");
-  }
-  return requestOrigin;
-}
-
 function redactMapayQueryUrl(url: URL) {
   const safeUrl = new URL(url.toString());
   if (safeUrl.searchParams.has("key")) {
     safeUrl.searchParams.set("key", "[redacted]");
   }
   return safeUrl.toString();
-}
-
-function summarizeMapayPayload(params: MapayPayload) {
-  return Object.fromEntries(
-    Object.entries(params).map(([field, value]) => [
-      field,
-      field === "sign" ? "[redacted]" : value,
-    ]),
-  );
-}
-
-export async function readMapayRequestSnapshot(request: Request): Promise<MapayRequestSnapshot> {
-  const url = new URL(request.url);
-  let rawBody = "";
-
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    rawBody = await request.clone().text();
-  }
-
-  return {
-    method: request.method,
-    url: request.url,
-    headers: Object.fromEntries(request.headers.entries()),
-    raw_query: url.search,
-    raw_body: rawBody,
-  };
 }
 
 export function createMapaySign(params: MapayPayload, key: string) {
@@ -116,7 +73,6 @@ export type BuildMapaySubmitUrlOptions = {
   order: OrderRecord;
   pay_type: string;
   request_origin: string;
-  access_token: string;
   site_name?: string;
 };
 
@@ -125,20 +81,19 @@ export type BuildMapaySubmitUrlOptions = {
  * 成功后可以把 trade_no 存入订单（创建时就有平台流水号）。
  */
 export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): Promise<MapayCreateResult> {
-  const { order, pay_type, request_origin, access_token } = options;
+  const { order, pay_type, request_origin } = options;
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
-  const appUrl = getAppUrl(request_origin);
+  const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl);
-  returnUrl.searchParams.set("token", access_token);
+  const returnUrl = new URL("/pay/return", appUrl).toString();
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl.toString(),
+    return_url: returnUrl,
     name: order.product_name.slice(0, 127),
     money: Number(order.money).toFixed(2),
     param: order.product_id,
@@ -174,11 +129,11 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
   logger.info("mapi response", {
     out_trade_no: order.out_trade_no,
     status: response.status,
-    raw_body: responseText,
+    body_length: responseText.length,
   });
 
   if (!response.ok) {
-    throw new Error(`MAPI request failed with HTTP ${response.status}: ${responseText}`);
+    throw new Error(`MAPI request failed with HTTP ${response.status}`);
   }
 
   let result: MapayCreateResult;
@@ -187,7 +142,7 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
   } catch (error) {
     logger.error("mapi parse failed", {
       out_trade_no: order.out_trade_no,
-      raw_body: responseText,
+      body_length: responseText.length,
       error,
     });
     throw error;
@@ -195,7 +150,8 @@ export async function createMapayPayment(options: BuildMapaySubmitUrlOptions): P
 
   logger.info("mapi parsed", {
     out_trade_no: order.out_trade_no,
-    result,
+    code: result.code,
+    trade_no: result.trade_no ?? null,
   });
 
   if (Number(result.code) !== 1) {
@@ -209,22 +165,20 @@ export function buildMapaySubmitUrl({
   order,
   pay_type,
   request_origin,
-  access_token,
   site_name,
 }: BuildMapaySubmitUrlOptions) {
   const pid = getRequiredEnv("MAPAY_PID");
   const key = getRequiredEnv("MAPAY_KEY");
-  const appUrl = getAppUrl(request_origin);
+  const appUrl = request_origin;
   const notifyUrl = new URL("/api/pay/notify", appUrl).toString();
-  const returnUrl = new URL("/pay/return", appUrl);
-  returnUrl.searchParams.set("token", access_token);
+  const returnUrl = new URL("/pay/return", appUrl).toString();
 
   const params: MapayPayload = {
     pid,
     type: pay_type,
     out_trade_no: order.out_trade_no,
     notify_url: notifyUrl,
-    return_url: returnUrl.toString(),
+    return_url: returnUrl,
     name: order.product_name,
     money: Number(order.money).toFixed(2),
     sitename: process.env.MAPAY_SITENAME || site_name || "码付小铺",
@@ -251,8 +205,6 @@ export function buildMapaySubmitUrl({
     out_trade_no: order.out_trade_no,
     pay_type,
     gateway: paymentUrl.origin + paymentUrl.pathname,
-    params: summarizeMapayPayload(signedParams),
-    url: paymentUrl.toString(),
   });
 
   return paymentUrl.toString();
@@ -288,13 +240,11 @@ export async function queryMapayOrder(outTradeNo: string) {
   logger.info("query response", {
     out_trade_no: outTradeNo,
     status: response.status,
-    status_text: response.statusText,
-    headers: Object.fromEntries(response.headers.entries()),
-    raw_body: responseText,
+    body_length: responseText.length,
   });
 
   if (!response.ok) {
-    throw new Error(`Mapay query failed with HTTP ${response.status}: ${responseText}`);
+    throw new Error(`Mapay query failed with HTTP ${response.status}`);
   }
 
   let result: MapayQueryResult;
@@ -303,7 +253,7 @@ export async function queryMapayOrder(outTradeNo: string) {
   } catch (error) {
     logger.error("query parse failed", {
       out_trade_no: outTradeNo,
-      raw_body: responseText,
+      body_length: responseText.length,
       error,
     });
     throw error;
@@ -311,7 +261,9 @@ export async function queryMapayOrder(outTradeNo: string) {
 
   logger.info("query parsed", {
     out_trade_no: outTradeNo,
-    result,
+    code: result.code,
+    status: result.status ?? null,
+    trade_no: result.trade_no ?? null,
   });
 
   return result;

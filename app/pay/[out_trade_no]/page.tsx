@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
 import { getOrderViewWithAccess } from "@/lib/orders";
+import { getOrderAccessToken } from "@/lib/order-access";
 import { getRequestOrigin } from "@/lib/request-utils";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +22,10 @@ type PayPageProps = {
   params: {
     out_trade_no: string;
   };
-  searchParams?: {
-    token?: string;
-  };
 };
 
-export default async function PayPage({ params, searchParams }: PayPageProps) {
-  const accessToken = searchParams?.token ?? "";
+export default async function PayPage({ params }: PayPageProps) {
+  const accessToken = getOrderAccessToken(params.out_trade_no);
   const order = await getOrderViewWithAccess(params.out_trade_no, accessToken);
 
   if (!order) {
@@ -42,17 +40,12 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
       order,
       pay_type: order.pay_type,
       request_origin: getRequestOrigin(),
-      access_token: accessToken,
     });
   } catch {
     configError = "支付配置未就绪，请检查 MAPAY_PID、MAPAY_KEY 和通道配置。";
   }
 
-  const statusHref =
-    "/orders/" +
-    encodeURIComponent(order.out_trade_no) +
-    "?token=" +
-    encodeURIComponent(accessToken);
+  const statusHref = "/orders/" + encodeURIComponent(order.out_trade_no);
 
   return (
     <main className="page-shell px-3 py-5 sm:px-4 sm:py-8">
@@ -139,7 +132,7 @@ export default async function PayPage({ params, searchParams }: PayPageProps) {
                 <Timer className="h-4 w-4 text-sky-500" />
                 状态追踪
               </div>
-              <OrderStatusPanel initial_order={order} access_token={accessToken} compact />
+              <OrderStatusPanel initial_order={order} compact />
             </div>
           </div>
         </section>
