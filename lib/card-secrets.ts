@@ -7,6 +7,8 @@ import {
 import { ensureStoreSchema } from "@/lib/store-schema";
 
 export type CardSecretStatus = "available" | "reserved" | "used";
+export type CardSecretSortKey = "created_at" | "id" | "status" | "batch_no";
+export type SortDirection = "asc" | "desc";
 
 export type CardSecretRecord = {
   id: string;
@@ -27,6 +29,31 @@ export type CardSecretStats = {
   available: number;
   reserved: number;
   used: number;
+};
+
+export type CardSecretBatchStats = CardSecretStats & {
+  value: string;
+  label: string;
+  latest_at: string;
+};
+
+export type CardSecretListResult = {
+  card_secrets: CardSecretRecord[];
+  batches: CardSecretBatchStats[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type ListCardSecretsInput = {
+  product_id: string;
+  status?: string;
+  query?: string;
+  batch?: string;
+  unbatched?: boolean;
+  page?: number;
+  sort_key?: CardSecretSortKey;
+  sort_direction?: SortDirection;
 };
 
 type CardSecretRow = Omit<CardSecretRecord, "secret"> & {
@@ -143,33 +170,133 @@ export async function getCardSecretStats(productId: string): Promise<CardSecretS
   return stats;
 }
 
-export async function listCardSecrets(productId: string, status?: string) {
+export async function listCardSecrets(input: ListCardSecretsInput): Promise<CardSecretListResult> {
   await ensureStoreSchema();
 
-  const result = await getPool().query<CardSecretRow>(
-    `
-      SELECT
-        id::text,
-        product_id,
-        secret_ciphertext,
-        status,
-        order_no,
-        batch_no,
-        note,
-        reserved_at,
-        used_at,
-        created_at,
-        updated_at
-      FROM card_secrets
-      WHERE product_id = $1
-        AND ($2 = '' OR status = $2)
-      ORDER BY id DESC
-      LIMIT 200
-    `,
-    [productId, status ?? ""],
-  );
+  const productId = input.product_id.trim();
+  const status = input.status ?? "";
+  const keyword = (input.query ?? "").trim().slice(0, 4000);
+  const metadataKeyword = keyword.slice(0, 120);
+  const batch = input.batch;
+  const unbatched = input.unbatched === true;
+  const sortKey = input.sort_key ?? "created_at";
+  const sortDirection = input.sort_direction ?? "desc";
+  const pageSize = 50;
+  const page = Number.isFinite(input.page)
+    ? Math.min(1_000_000, Math.max(1, Math.trunc(input.page ?? 1)))
+    : 1;
+  const offset = (page - 1) * pageSize;
+  const orderExpressions: Record<CardSecretSortKey, string> = {
+    created_at: "created_at",
+    id: "id",
+    status: "CASE status WHEN 'available' THEN 1 WHEN 'reserved' THEN 2 ELSE 3 END",
+    batch_no: "LOWER(NULLIF(batch_no, ''))",
+  };
+  const direction = sortDirection === "asc" ? "ASC" : "DESC";
+  const nulls = sortKey === "batch_no" ? " NULLS LAST" : "";
+  const orderBy = `${orderExpressions[sortKey]} ${direction}${nulls}, id ${direction}`;
 
-  return result.rows.map(decryptRow);
+  const baseConditions = ["product_id = $1"];
+  const baseParams: unknown[] = [productId];
+  if (status) {
+    baseParams.push(status);
+    baseConditions.push(`status = $${baseParams.length}`);
+  }
+  if (keyword) {
+    baseParams.push(`%${metadataKeyword}%`);
+    const likeIndex = baseParams.length;
+    baseParams.push(hashCardSecret(keyword));
+    const hashIndex = baseParams.length;
+    baseConditions.push(`(
+      id::text ILIKE $${likeIndex}
+      OR batch_no ILIKE $${likeIndex}
+      OR note ILIKE $${likeIndex}
+      OR COALESCE(order_no, '') ILIKE $${likeIndex}
+      OR secret_hash = $${hashIndex}
+    )`);
+  }
+
+  const listConditions = [...baseConditions];
+  const listParams = [...baseParams];
+  if (unbatched) {
+    listConditions.push("batch_no = ''");
+  } else if (batch !== undefined) {
+    listParams.push(batch);
+    listConditions.push(`batch_no = $${listParams.length}`);
+  }
+
+  const baseWhere = `WHERE ${baseConditions.join(" AND ")}`;
+  const listWhere = `WHERE ${listConditions.join(" AND ")}`;
+  const limitIndex = listParams.length + 1;
+
+  const [rowsResult, countResult, batchesResult] = await Promise.all([
+    getPool().query<CardSecretRow>(
+      `
+        SELECT
+          id::text,
+          product_id,
+          secret_ciphertext,
+          status,
+          order_no,
+          batch_no,
+          note,
+          reserved_at,
+          used_at,
+          created_at,
+          updated_at
+        FROM card_secrets
+        ${listWhere}
+        ORDER BY ${orderBy}
+        LIMIT $${limitIndex} OFFSET $${limitIndex + 1}
+      `,
+      [...listParams, pageSize, offset],
+    ),
+    getPool().query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM card_secrets ${listWhere}`,
+      listParams,
+    ),
+    getPool().query<{
+      value: string;
+      label: string;
+      latest_at: string;
+      total: string;
+      available: string;
+      reserved: string;
+      used: string;
+    }>(
+      `
+        SELECT
+          batch_no AS value,
+          COALESCE(NULLIF(batch_no, ''), '未分批') AS label,
+          MAX(created_at) AS latest_at,
+          COUNT(*)::text AS total,
+          COUNT(*) FILTER (WHERE status = 'available')::text AS available,
+          COUNT(*) FILTER (WHERE status = 'reserved')::text AS reserved,
+          COUNT(*) FILTER (WHERE status = 'used')::text AS used
+        FROM card_secrets
+        ${baseWhere}
+        GROUP BY batch_no
+        ORDER BY MAX(created_at) DESC, LOWER(batch_no) ASC
+      `,
+      baseParams,
+    ),
+  ]);
+
+  return {
+    card_secrets: rowsResult.rows.map(decryptRow),
+    batches: batchesResult.rows.map((row) => ({
+      value: row.value,
+      label: row.label,
+      latest_at: row.latest_at,
+      total: Number(row.total),
+      available: Number(row.available),
+      reserved: Number(row.reserved),
+      used: Number(row.used),
+    })),
+    total: Number(countResult.rows[0]?.total ?? 0),
+    page,
+    page_size: pageSize,
+  };
 }
 
 export async function deleteCardSecret(secretId: string) {

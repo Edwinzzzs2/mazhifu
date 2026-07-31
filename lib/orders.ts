@@ -736,23 +736,61 @@ export async function recordOrderQuery(outTradeNo: string, result: MapayQueryRes
 
 export type AdminOrderListItem = OrderRecord;
 
+export type AdminOrderSort =
+  | "created_desc"
+  | "created_asc"
+  | "money_desc"
+  | "money_asc"
+  | "status_asc";
+
 export type AdminOrderListResult = {
   orders: AdminOrderListItem[];
   total: number;
   page: number;
   page_size: number;
+  sort: AdminOrderSort;
 };
+
+const ADMIN_ORDER_SORT_SQL: Record<AdminOrderSort, string> = {
+  created_desc: "created_at DESC, out_trade_no DESC",
+  created_asc: "created_at ASC, out_trade_no ASC",
+  money_desc: "money DESC, created_at DESC, out_trade_no DESC",
+  money_asc: "money ASC, created_at DESC, out_trade_no DESC",
+  status_asc: `
+    CASE
+      WHEN status = 'pending' THEN 0
+      WHEN status = 'paid' AND fulfillment_status = 'failed' THEN 1
+      WHEN status = 'paid' AND fulfillment_status = 'pending' THEN 2
+      WHEN status = 'paid' THEN 3
+      WHEN status = 'expired' THEN 4
+      WHEN status = 'cancelled' THEN 5
+      ELSE 6
+    END ASC,
+    created_at DESC,
+    out_trade_no DESC
+  `,
+};
+
+function normalizeAdminOrderSort(sort: string): AdminOrderSort {
+  return Object.prototype.hasOwnProperty.call(ADMIN_ORDER_SORT_SQL, sort)
+    ? (sort as AdminOrderSort)
+    : "created_desc";
+}
 
 export async function listOrdersForAdmin(
   page = 1,
   status = "",
   q = "",
+  sort = "created_desc",
 ): Promise<AdminOrderListResult> {
   await ensureStoreSchema();
 
   const pageSize = 20;
-  const offset = (Math.max(1, page) - 1) * pageSize;
+  const normalizedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
+  const offset = (normalizedPage - 1) * pageSize;
   const keyword = q.trim().slice(0, 120);
+  const normalizedSort = normalizeAdminOrderSort(sort);
+  const orderBy = ADMIN_ORDER_SORT_SQL[normalizedSort];
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -777,7 +815,7 @@ export async function listOrdersForAdmin(
       params,
     ),
     getPool().query<OrderRecord>(
-      `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      `SELECT * FROM orders ${where} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, pageSize, offset],
     ),
   ]);
@@ -785,8 +823,9 @@ export async function listOrdersForAdmin(
   return {
     orders: rowsResult.rows,
     total: Number(countResult.rows[0]?.total ?? 0),
-    page: Math.max(1, page),
+    page: normalizedPage,
     page_size: pageSize,
+    sort: normalizedSort,
   };
 }
 

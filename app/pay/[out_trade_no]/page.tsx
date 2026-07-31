@@ -14,7 +14,9 @@ import { Button } from "@/components/ui/button";
 import { buildMapaySubmitUrl } from "@/lib/mapay";
 import { getOrderViewWithSession } from "@/lib/orders";
 import { getOrderSessionToken } from "@/lib/order-access";
+import { toOrderStatusView } from "@/lib/order-status-view";
 import { getRequestOrigin } from "@/lib/request-utils";
+import { getSiteSettingsSafe } from "@/lib/site-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,10 @@ type PayPageProps = {
 
 export default async function PayPage({ params }: PayPageProps) {
   const sessionToken = getOrderSessionToken();
-  const order = await getOrderViewWithSession(params.out_trade_no, sessionToken);
+  const [order, siteSettings] = await Promise.all([
+    getOrderViewWithSession(params.out_trade_no, sessionToken),
+    getSiteSettingsSafe(),
+  ]);
 
   if (!order) {
     notFound();
@@ -40,6 +45,7 @@ export default async function PayPage({ params }: PayPageProps) {
       order,
       pay_type: order.pay_type,
       request_origin: getRequestOrigin(),
+      site_name: siteSettings.mapay_sitename || siteSettings.site_name,
     });
   } catch {
     configError = "支付配置未就绪，请检查 MAPAY_PID、MAPAY_KEY 和通道配置。";
@@ -132,7 +138,7 @@ export default async function PayPage({ params }: PayPageProps) {
                 <Timer className="h-4 w-4 text-sky-500" />
                 状态追踪
               </div>
-              <OrderStatusPanel initial_order={order} compact />
+              <OrderStatusPanel initial_order={toOrderStatusView(order)} compact />
             </div>
           </div>
         </section>

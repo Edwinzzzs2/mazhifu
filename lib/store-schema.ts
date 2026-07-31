@@ -32,6 +32,7 @@ async function initializeStoreSchema() {
       price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
       stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
       sold_count INTEGER NOT NULL DEFAULT 0 CHECK (sold_count >= 0),
+      sort_order INTEGER NOT NULL DEFAULT 0,
       badge TEXT NOT NULL DEFAULT '',
       image_url TEXT NOT NULL DEFAULT '',
       features JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -39,6 +40,14 @@ async function initializeStoreSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS category_id BIGINT REFERENCES categories(id) ON DELETE SET NULL;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS orders (
       out_trade_no TEXT PRIMARY KEY,

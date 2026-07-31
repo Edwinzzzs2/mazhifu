@@ -74,12 +74,11 @@ function pickNoticeItems(value: unknown) {
     return DEFAULT_SITE_SETTINGS.notice_items;
   }
 
-  const items = value
-    .map((item) => (typeof item === "string" ? item.trim().slice(0, 160) : ""))
+  return Array.from(new Set(
+    value.map((item) => (typeof item === "string" ? item.trim().slice(0, 160) : "")),
+  ))
     .filter(Boolean)
     .slice(0, MAX_NOTICE_ITEMS);
-
-  return items.length ? items : DEFAULT_SITE_SETTINGS.notice_items;
 }
 
 export function normalizeSiteSettings(value: unknown): SiteSettings {
@@ -125,6 +124,12 @@ export async function getSiteSettingsSafe() {
 
 export async function updateSiteSettings(value: unknown) {
   const settings = normalizeSiteSettings(value);
+  if (
+    settings.contact_email
+    && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.contact_email)
+  ) {
+    throw new Error("售后邮箱格式不正确");
+  }
 
   await ensureStoreSchema();
   await getPool().query(

@@ -1,7 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -13,8 +16,22 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { adminFetch } from "@/lib/admin-client-auth";
-import type { AdminOrderDetail, AdminOrderListItem, AdminOrderListResult } from "@/lib/orders";
+import type {
+  AdminOrderDetail,
+  AdminOrderListItem,
+  AdminOrderListResult,
+  AdminOrderSort,
+} from "@/lib/orders";
+
+const SORT_OPTIONS: Array<{ value: AdminOrderSort; label: string }> = [
+  { value: "created_desc", label: "下单时间：最新优先" },
+  { value: "created_asc", label: "下单时间：最早优先" },
+  { value: "money_desc", label: "订单金额：从高到低" },
+  { value: "money_asc", label: "订单金额：从低到高" },
+  { value: "status_asc", label: "订单状态：待处理优先" },
+];
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   pending: { label: "待付款", className: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -47,6 +64,12 @@ function formatDate(dateStr: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function SortIcon({ direction }: { direction: "asc" | "desc" | "none" }) {
+  if (direction === "asc") return <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (direction === "desc") return <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />;
+  return <ArrowUpDown className="h-3.5 w-3.5 text-slate-300" aria-hidden="true" />;
 }
 
 function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
@@ -170,49 +193,74 @@ export function AdminOrderList() {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [inputQ, setInputQ] = useState("");
+  const [sort, setSort] = useState<AdminOrderSort>("created_desc");
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const currentQueryRef = useRef({ page, status, q, sort });
+  currentQueryRef.current = { page, status, q, sort };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const load = useCallback(
-    async (nextPage = page, nextStatus = status, nextQ = q) => {
+    async (
+      nextPage: number,
+      nextStatus: string,
+      nextQ: string,
+      nextSort: AdminOrderSort,
+    ) => {
+      const requestId = ++requestIdRef.current;
       setLoading(true);
       try {
         const url = new URL("/api/admin/orders", window.location.origin);
         url.searchParams.set("page", String(nextPage));
+        url.searchParams.set("sort", nextSort);
         if (nextStatus) url.searchParams.set("status", nextStatus);
         if (nextQ) url.searchParams.set("q", nextQ);
         const resp = await adminFetch(url, { cache: "no-store" });
         const data = (await resp.json()) as AdminOrderListResult & { message?: string };
         if (!resp.ok) throw new Error(data.message ?? "加载失败");
+        if (requestId !== requestIdRef.current) return;
         setOrders(data.orders ?? []);
         setTotal(data.total ?? 0);
         setPage(data.page ?? 1);
         setPageSize(data.page_size ?? 20);
+        setSort(data.sort ?? nextSort);
       } catch {
+        if (requestId !== requestIdRef.current) return;
         toast.error("订单加载失败，请稍后重试");
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [page, status, q],
+    [],
   );
 
   useEffect(() => {
-    void load(1, status, q);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, q]);
+    void load(1, status, q, sort);
+  }, [load, q, sort, status]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    setQ(inputQ);
+    const nextQ = inputQ.trim();
+    if (nextQ === q) {
+      void load(1, status, nextQ, sort);
+    } else {
+      setQ(nextQ);
+    }
     setPage(1);
+    setExpandedId(null);
   }
 
   function handleStatusChange(val: string) {
     setStatus(val);
+    setPage(1);
+    setExpandedId(null);
+  }
+
+  function handleSortChange(nextSort: AdminOrderSort) {
+    setSort(nextSort);
     setPage(1);
     setExpandedId(null);
   }
@@ -224,7 +272,7 @@ export function AdminOrderList() {
   function goPage(p: number) {
     const next = Math.max(1, Math.min(totalPages, p));
     setPage(next);
-    void load(next, status, q);
+    void load(next, status, q, sort);
   }
 
   async function handleVerify(e: React.MouseEvent, outTradeNo: string) {
@@ -251,8 +299,9 @@ export function AdminOrderList() {
       } else {
         toast.success(actionLabel || "操作完成", toastOptions);
       }
-      // 刷新表格
-      void load(page, status, q);
+      // 核实期间筛选条件可能已经变化，始终刷新用户当前正在看的列表。
+      const current = currentQueryRef.current;
+      void load(current.page, current.status, current.q, current.sort);
     } catch (err) {
       toast.error("网络错误", { description: String(err) });
     } finally {
@@ -279,7 +328,7 @@ export function AdminOrderList() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => load(page, status, q)}
+          onClick={() => load(page, status, q, sort)}
           disabled={loading}
           className="w-full sm:w-auto"
         >
@@ -289,18 +338,25 @@ export function AdminOrderList() {
       </div>
 
       {/* 筛选栏 */}
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="space-y-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3 sm:px-5">
         {/* 状态筛选 */}
-        <div className="inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm">
+        <div
+          className="inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm"
+          role="group"
+          aria-label="按支付状态筛选"
+        >
           {[
             { value: "", label: "全部" },
             { value: "pending", label: "待付款" },
             { value: "paid", label: "已付款" },
             { value: "expired", label: "已过期" },
+            { value: "cancelled", label: "已取消" },
           ].map((item) => (
             <button
+              type="button"
               key={item.value}
               onClick={() => handleStatusChange(item.value)}
+              aria-pressed={status === item.value}
               className={`whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
                 status === item.value
                   ? "bg-sky-600 text-white"
@@ -312,18 +368,34 @@ export function AdminOrderList() {
           ))}
         </div>
 
-        {/* 搜索 */}
-        <form onSubmit={handleSearch} className="flex gap-2 sm:shrink-0">
-          <Input
-            className="h-9 w-full text-sm sm:w-64"
-            placeholder="订单号 / 联系方式"
-            value={inputQ}
-            onChange={(e) => setInputQ(e.target.value)}
-          />
-          <Button type="submit" variant="outline" size="sm" className="shrink-0">
-            <Search className="h-4 w-4" />
-          </Button>
-        </form>
+        <div className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_220px]">
+          {/* 搜索 */}
+          <form onSubmit={handleSearch} className="flex min-w-0 gap-2">
+            <Input
+              className="h-10 min-w-0 flex-1 text-sm"
+              placeholder="搜索订单号或联系方式"
+              aria-label="搜索订单号或联系方式"
+              value={inputQ}
+              onChange={(e) => setInputQ(e.target.value)}
+            />
+            <Button type="submit" variant="outline" className="shrink-0" aria-label="搜索订单">
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">搜索</span>
+            </Button>
+          </form>
+
+          <NativeSelect
+            value={sort}
+            onChange={(event) => handleSortChange(event.target.value as AdminOrderSort)}
+            aria-label="订单排序方式"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
       </div>
 
       {/* 订单列表 */}
@@ -337,46 +409,63 @@ export function AdminOrderList() {
           ) : (
             orders.map((order) => (
               <Fragment key={order.out_trade_no}>
-                <div
-                  className="cursor-pointer px-4 py-3 active:bg-sky-50/60"
-                  onClick={() => toggleExpand(order.out_trade_no)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {expandedId === order.out_trade_no ? (
-                          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        )}
-                        <span className="truncate font-mono text-xs text-slate-400">{order.out_trade_no}</span>
+                <article className="px-4 py-3">
+                  <button
+                    type="button"
+                    className="w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                    onClick={() => toggleExpand(order.out_trade_no)}
+                    aria-expanded={expandedId === order.out_trade_no}
+                    aria-label={`${expandedId === order.out_trade_no ? "收起" : "展开"}订单 ${order.out_trade_no}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {expandedId === order.out_trade_no ? (
+                            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          )}
+                          <span className="truncate font-mono text-xs text-slate-400">
+                            {order.out_trade_no}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="line-clamp-1 text-sm font-semibold">
+                            {order.product_name}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                          <span className="font-semibold tabular-nums text-sky-700">
+                            ¥{order.money}
+                          </span>
+                          <span>×{order.quantity}</span>
+                          {order.contact && (
+                            <span className="max-w-[160px] truncate">{order.contact}</span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-xs tabular-nums text-slate-400">
+                          {formatDate(order.created_at)}
+                        </div>
                       </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="line-clamp-1 text-sm font-semibold">{order.product_name}</span>
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                        <span className="font-semibold text-sky-700">¥{order.money}</span>
-                        <span>×{order.quantity}</span>
-                        {order.contact && <span className="truncate max-w-[120px]">{order.contact}</span>}
-                        <span>{formatDate(order.created_at)}</span>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
+                        <StatusPill value={order.status} map={STATUS_LABELS} />
+                        <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <StatusPill value={order.status} map={STATUS_LABELS} />
-                      <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-1 w-20 text-xs"
-                        disabled={verifyingId === order.out_trade_no}
-                        onClick={(e) => handleVerify(e, order.out_trade_no)}
-                      >
-                        <ShieldCheck className="h-3 w-3 shrink-0" />
-                        {verifyingId === order.out_trade_no ? "核实中" : "核实"}
-                      </Button>
-                    </div>
+                  </button>
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="min-w-20 text-xs"
+                      disabled={verifyingId === order.out_trade_no}
+                      onClick={(e) => handleVerify(e, order.out_trade_no)}
+                    >
+                      <ShieldCheck className="h-3 w-3 shrink-0" />
+                      {verifyingId === order.out_trade_no ? "核实中" : "核实支付"}
+                    </Button>
                   </div>
-                </div>
+                </article>
                 {expandedId === order.out_trade_no && (
                   <div>
                     <OrderDetailPanel outTradeNo={order.out_trade_no} />
@@ -407,12 +496,70 @@ export function AdminOrderList() {
                 <th className="px-4 py-3" />
                 <th className="px-4 py-3">订单号</th>
                 <th className="px-4 py-3">商品</th>
-                <th className="px-4 py-3">金额</th>
+                <th
+                  className="px-4 py-3"
+                  aria-sort={
+                    sort === "money_asc"
+                      ? "ascending"
+                      : sort === "money_desc"
+                        ? "descending"
+                        : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-sm font-semibold hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    onClick={() =>
+                      handleSortChange(sort === "money_desc" ? "money_asc" : "money_desc")
+                    }
+                    aria-label={`按金额${sort === "money_desc" ? "从低到高" : "从高到低"}排序`}
+                  >
+                    金额
+                    <SortIcon
+                      direction={
+                        sort === "money_asc" ? "asc" : sort === "money_desc" ? "desc" : "none"
+                      }
+                    />
+                  </button>
+                </th>
                 <th className="px-4 py-3">数量</th>
                 <th className="px-4 py-3">联系方式</th>
-                <th className="px-4 py-3">支付状态</th>
+                <th className="px-4 py-3" aria-sort={sort === "status_asc" ? "other" : "none"}>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-sm font-semibold hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    onClick={() => handleSortChange("status_asc")}
+                    aria-label="按状态排序，待处理订单优先"
+                  >
+                    支付状态
+                    <SortIcon direction={sort === "status_asc" ? "asc" : "none"} />
+                  </button>
+                </th>
                 <th className="px-4 py-3">发货状态</th>
-                <th className="px-4 py-3">下单时间</th>
+                <th
+                  className="px-4 py-3"
+                  aria-sort={
+                    sort === "created_asc"
+                      ? "ascending"
+                      : sort === "created_desc"
+                        ? "descending"
+                        : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-sm font-semibold hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    onClick={() =>
+                      handleSortChange(sort === "created_desc" ? "created_asc" : "created_desc")
+                    }
+                    aria-label={`按下单时间${sort === "created_desc" ? "从早到晚" : "从晚到早"}排序`}
+                  >
+                    下单时间
+                    <SortIcon
+                      direction={sort === "created_asc" ? "asc" : sort === "created_desc" ? "desc" : "none"}
+                    />
+                  </button>
+                </th>
                 <th className="px-4 py-3">操作</th>
               </tr>
             </thead>
@@ -430,12 +577,25 @@ export function AdminOrderList() {
                       className="cursor-pointer hover:bg-sky-50/60"
                       onClick={() => toggleExpand(order.out_trade_no)}
                     >
-                      <td className="px-4 py-3 text-slate-400">
-                        {expandedId === order.out_trade_no ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
+                      <td className="px-2 py-3 text-slate-400">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpand(order.out_trade_no);
+                          }}
+                          aria-expanded={expandedId === order.out_trade_no}
+                          aria-label={`${expandedId === order.out_trade_no ? "收起" : "展开"}订单详情`}
+                        >
+                          {expandedId === order.out_trade_no ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </Button>
                       </td>
                       <td className="min-w-0 px-4 py-3 font-mono text-xs text-slate-500">
                         <div className="truncate" title={order.out_trade_no}>{order.out_trade_no}</div>
@@ -443,7 +603,7 @@ export function AdminOrderList() {
                       <td className="min-w-0 px-4 py-3">
                         <div className="truncate" title={order.product_name}>{order.product_name}</div>
                       </td>
-                      <td className="px-4 py-3 font-semibold text-sky-700">¥{order.money}</td>
+                      <td className="px-4 py-3 font-semibold tabular-nums text-sky-700">¥{order.money}</td>
                       <td className="px-4 py-3">{order.quantity}</td>
                       <td className="min-w-0 px-4 py-3 text-xs text-slate-500">
                         <div className="truncate" title={order.contact || undefined}>{order.contact || "-"}</div>
@@ -454,7 +614,7 @@ export function AdminOrderList() {
                       <td className="px-4 py-3">
                         <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-slate-500">
                         {formatDate(order.created_at)}
                       </td>
                       <td className="px-4 py-3">

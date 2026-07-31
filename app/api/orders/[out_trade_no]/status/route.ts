@@ -7,6 +7,7 @@ import {
   retryOrderFulfillment,
 } from "@/lib/orders";
 import { getOrderSessionTokenFromRequest } from "@/lib/order-access";
+import { toOrderStatusView } from "@/lib/order-status-view";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
 const logger = createLogger("orders:status");
@@ -16,24 +17,6 @@ type StatusRouteContext = {
     out_trade_no: string;
   };
 };
-
-function formatOrderResponse(order: NonNullable<Awaited<ReturnType<typeof getOrderViewInternal>>>) {
-  return {
-    out_trade_no: order.out_trade_no,
-    product_name: order.product_name,
-    money: Number(order.money).toFixed(2),
-    quantity: order.quantity,
-    pay_type: order.pay_type,
-    status: order.status,
-    fulfillment_status: order.fulfillment_status,
-    trade_no: order.status === "paid" ? order.trade_no : null,
-    delivery_content: order.delivery_content,
-    created_at: order.created_at,
-    expires_at: order.expires_at,
-    paid_at: order.paid_at,
-    fulfilled_at: order.fulfilled_at,
-  };
-}
 
 /**
  * 订单状态查询接口 — 纯读取 DB 状态。
@@ -99,7 +82,7 @@ async function getStatusResponse(
     }
   }
 
-  return NextResponse.json(formatOrderResponse(order), {
+  return NextResponse.json(toOrderStatusView(order), {
     headers: { "Cache-Control": "no-store" },
   });
 }

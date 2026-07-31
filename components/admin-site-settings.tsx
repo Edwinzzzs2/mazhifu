@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
   Globe2,
+  Headphones,
   Image as ImageIcon,
   KeyRound,
   ListChecks,
@@ -44,12 +46,13 @@ function noticesToText(items: string[]) {
 }
 
 function toPayload(settings: SiteSettings, noticeText: string): SiteSettings {
+  const announcement = settings.announcement.trim();
   return {
     ...settings,
-    notice_items: noticeText
+    notice_items: Array.from(new Set(noticeText
       .split(/\r?\n/)
       .map((item) => item.trim())
-      .filter(Boolean),
+      .filter((item) => item && item !== announcement))),
   };
 }
 
@@ -70,6 +73,7 @@ export function AdminSiteSettings({
   initial_general_settings,
   initial_users,
 }: AdminSiteSettingsProps) {
+  const router = useRouter();
   const [settings, setSettings] = useState(initial_settings);
   const [generalSettings, setGeneralSettings] = useState(initial_general_settings);
   const [users, setUsers] = useState(initial_users);
@@ -144,6 +148,7 @@ export function AdminSiteSettings({
 
       setSettings(data.settings);
       setNoticeText(noticesToText(data.settings.notice_items));
+      router.refresh();
       toast.success("站点设置已保存");
     } catch {
       toast.error("网络错误，保存失败");
@@ -275,7 +280,7 @@ export function AdminSiteSettings({
     <div className="space-y-4">
       <div className="admin-panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm font-bold text-slate-900">设置分类</div>
+          <div className="text-sm font-bold text-slate-900">设置分组</div>
           <p className="mt-0.5 text-xs text-slate-500">按工作内容切换，减少无关表单干扰</p>
         </div>
         <div className="grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1 sm:w-72">
@@ -532,10 +537,13 @@ export function AdminSiteSettings({
             </AdminField>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <AdminField label="客服邮箱" icon={<Mail className="h-4 w-4" />}>
+              <AdminField label="售后邮箱" icon={<Mail className="h-4 w-4" />}>
                 <Input
+                  type="email"
                   value={settings.contact_email}
                   maxLength={120}
+                  placeholder="填写后，前台头部可直接发起邮件"
+                  autoComplete="email"
                   onChange={(event) => updateField("contact_email", event.target.value)}
                 />
               </AdminField>
@@ -549,11 +557,12 @@ export function AdminSiteSettings({
               </AdminField>
             </div>
 
-            <AdminField label="客服说明" icon={<Mail className="h-4 w-4" />}>
+            <AdminField label="售后说明" icon={<Headphones className="h-4 w-4" />}>
               <Textarea
                 className="min-h-20"
                 value={settings.contact_text}
                 maxLength={300}
+                placeholder="例如：工作日 9:00-18:00，请提供订单号"
                 onChange={(event) => updateField("contact_text", event.target.value)}
               />
             </AdminField>
@@ -582,7 +591,7 @@ export function AdminSiteSettings({
         <div className="admin-panel p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold">
             <Store className="h-4 w-4 text-sky-500" />
-            前台品牌预览
+            品牌与售后内容预览
           </div>
           <div className="admin-panel-muted p-4">
             <div className="flex items-center gap-2 font-bold">
@@ -596,6 +605,22 @@ export function AdminSiteSettings({
               <span className="min-w-0 truncate text-xl text-slate-950">{settings.site_name || "站点名称"}</span>
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-600">{settings.site_description}</p>
+            {settings.contact_text || settings.contact_email ? (
+              <div className="mt-3 flex items-start gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <Headphones className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-800">售后联系</div>
+                  {settings.contact_text ? (
+                    <div className="mt-0.5 [overflow-wrap:anywhere]">{settings.contact_text}</div>
+                  ) : null}
+                  {settings.contact_email ? (
+                    <div className="mt-1 break-all font-medium text-sky-700">{settings.contact_email}</div>
+                  ) : (
+                    <div className="mt-1 text-amber-700">暂未配置售后邮箱</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
             {settings.announcement ? (
               <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 {settings.announcement}
@@ -607,13 +632,12 @@ export function AdminSiteSettings({
         <div className="admin-panel p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold">
             <ListChecks className="h-4 w-4 text-sky-500" />
-            购买须知预览
+            购买须知内容预览
           </div>
-          <div className="grid gap-2">
-            {previewNotices.map((notice, index) => (
-              <div key={`${notice}-${index}`} className="flex gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm leading-6 shadow-sm">
-                <span className="font-bold text-sky-600">0{index + 1}</span>
-                <span>{notice}</span>
+          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            {previewNotices.map((notice) => (
+              <div key={notice} className="min-w-0 text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
+                {notice}
               </div>
             ))}
           </div>

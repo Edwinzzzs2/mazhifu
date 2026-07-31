@@ -19,9 +19,10 @@ export async function GET(request: Request) {
   const page = Number(url.searchParams.get("page") ?? 1);
   const status = url.searchParams.get("status") ?? "";
   const q = url.searchParams.get("q") ?? "";
+  const sort = url.searchParams.get("sort") ?? "created_desc";
 
   try {
-    const result = await listOrdersForAdmin(page, status, q);
+    const result = await listOrdersForAdmin(page, status, q, sort);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "查询订单失败";

@@ -12,6 +12,7 @@ import {
   orderSessionCookieOptions,
 } from "@/lib/order-access";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
+import { getSiteSettingsSafe } from "@/lib/site-settings";
 
 const PAY_TYPES = new Set(["alipay", "wxpay"]);
 const logger = createLogger("checkout");
@@ -49,7 +50,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const product = await getProductById(productId);
+    const [product, siteSettings] = await Promise.all([
+      getProductById(productId),
+      getSiteSettingsSafe(),
+    ]);
 
     if (
       !product ||
@@ -80,6 +84,7 @@ export async function POST(request: Request) {
       pay_type: payType,
       request_origin: origin,
       return_token: created.return_token,
+      site_name: siteSettings.mapay_sitename || siteSettings.site_name,
     };
 
     // 前台用户支付走 Submit 网关页，避免直接打开 MAPI 返回的 qrcode/urlscheme/第三方渲染页。

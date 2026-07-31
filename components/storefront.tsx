@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckCircle2,
@@ -22,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { SupportContact } from "@/components/support-contact";
 import type { CategoryRecord, ProductRecord } from "@/lib/products";
 import type { SiteSettings } from "@/lib/site-settings";
 
@@ -57,6 +59,9 @@ type RemoteOrderStatus = {
 };
 
 type ViewMode = "card" | "table";
+type SortMode = "default" | "price_asc" | "price_desc" | "sales_desc" | "newest";
+
+const UNCATEGORIZED_ID = "uncategorized";
 
 /* ─── Main component ─────────────────────────────────────── */
 
@@ -68,6 +73,7 @@ export function Storefront({
 }: StorefrontProps) {
   const [categoryId, setCategoryId] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const [sortMode, setSortMode] = useState<SortMode>("default");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<ProductRecord | null>(null);
   const [tracking, setTracking] = useState<TrackingInfo | null>(null);
@@ -80,34 +86,78 @@ export function Storefront({
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
 
-  const categoryProducts =
-    categoryId === "all"
-      ? products
-      : products.filter((p) => p.category_id === categoryId);
-  const currentCategoryName =
-    categoryId === "all"
-      ? "全部商品"
+  const defaultProductOrder = useMemo(
+    () => new Map(products.map((product, index) => [product.id, index])),
+    [products],
+  );
+  const availableCategories = useMemo(
+    () => categories
+      .map((category) => ({
+        ...category,
+        productCount: products.filter((product) => product.category_id === category.id).length,
+      }))
+      .filter((category) => category.productCount > 0),
+    [categories, products],
+  );
+  const uncategorizedCount = useMemo(
+    () => products.filter((product) => product.category_id === null).length,
+    [products],
+  );
+  const currentCategoryName = categoryId === "all"
+    ? "全部商品"
+    : categoryId === UNCATEGORIZED_ID
+      ? "未分类商品"
       : categories.find((category) => category.id === categoryId)?.name ?? "全部商品";
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredProducts = normalizedSearch
-    ? categoryProducts.filter((product) => {
-        const searchText = [
-          product.name,
-          product.subtitle,
-          product.description,
-          product.badge,
-        ].join(" ").toLowerCase();
-        return searchText.includes(normalizedSearch);
-      })
-    : categoryProducts;
-  const noticeItems = site_settings.notice_items;
-  const availableCategories = categories
-    .map((category) => ({
-      ...category,
-      productCount: products.filter((product) => product.category_id === category.id).length,
-    }))
-    .filter((category) => category.productCount > 0);
-  const showCategoryFilter = availableCategories.length > 1;
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const result = products.filter((product) => {
+      const categoryMatches = categoryId === "all"
+        || (categoryId === UNCATEGORIZED_ID
+          ? product.category_id === null
+          : product.category_id === categoryId);
+      if (!categoryMatches) return false;
+      if (!normalizedSearch) return true;
+
+      return [
+        product.name,
+        product.subtitle,
+        product.description,
+        product.badge,
+        product.category_name ?? "",
+      ].join(" ").toLowerCase().includes(normalizedSearch);
+    });
+
+    const fallback = (left: ProductRecord, right: ProductRecord) =>
+      (defaultProductOrder.get(left.id) ?? 0) - (defaultProductOrder.get(right.id) ?? 0);
+    return [...result].sort((left, right) => {
+      if (sortMode === "default") return fallback(left, right);
+      if (sortMode === "price_asc") {
+        return Number(left.price) - Number(right.price) || fallback(left, right);
+      }
+      if (sortMode === "price_desc") {
+        return Number(right.price) - Number(left.price) || fallback(left, right);
+      }
+      if (sortMode === "sales_desc") {
+        return right.sold_count - left.sold_count || fallback(left, right);
+      }
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+        || fallback(left, right);
+    });
+  }, [categoryId, defaultProductOrder, products, searchTerm, sortMode]);
+  const noticeItems = useMemo(
+    () => Array.from(new Set(site_settings.notice_items.map((notice) => notice.trim())))
+      .filter((notice) => notice && notice !== site_settings.announcement),
+    [site_settings.announcement, site_settings.notice_items],
+  );
+  const hasActiveFilters = categoryId !== "all"
+    || searchTerm.trim().length > 0
+    || sortMode !== "default";
+
+  function clearFilters() {
+    setCategoryId("all");
+    setSearchTerm("");
+    setSortMode("default");
+  }
 
   function openProduct(product: ProductRecord) {
     setSelectedProduct(product);
@@ -186,16 +236,27 @@ export function Storefront({
                 <ShoppingBag className="h-4 w-4 md:h-5 md:w-5" />
               )}
             </span>
-            <span className="truncate text-lg md:text-xl">{site_settings.site_name}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-lg leading-5 md:text-xl">
+                {site_settings.site_name}
+              </span>
+              <span className="hidden max-w-sm truncate text-xs font-medium leading-5 text-slate-500 md:block">
+                {site_settings.site_description}
+              </span>
+            </span>
           </a>
           <nav className="flex items-center gap-1">
+            <SupportContact
+              contact_email={site_settings.contact_email}
+              contact_text={site_settings.contact_text}
+            />
             <Button asChild variant="ghost" size="sm">
-              <a href="/orders/query">
+              <a href="/orders/query" aria-label="查询订单">
                 <Search className="h-4 w-4" />
                 <span className="hidden sm:inline">查订单</span>
               </a>
             </Button>
-            <Button asChild size="sm" className="shadow-none">
+            <Button asChild variant="outline" size="sm" className="shadow-none">
               <a href="/admin">
                 <span className="hidden sm:inline">管理后台</span>
                 <span className="sm:hidden">后台</span>
@@ -206,131 +267,62 @@ export function Storefront({
       </header>
 
       <main>
-        <section className="border-b border-slate-200/80 bg-white/35">
-          <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-            {checkout_failed ? (
-              <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                下单失败，请检查数据库、商品库存或支付配置。
-              </div>
-            ) : null}
-
-            <div className="max-w-3xl">
-              <h1 className="text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
-                {site_settings.site_name}
-              </h1>
-              <p className="mt-2 text-base leading-7 text-slate-600 sm:text-lg">
-                {site_settings.site_description}
-              </p>
-            </div>
-
-            {site_settings.announcement ? (
-              <div className="soft-banner mt-4 max-w-3xl px-4 py-2.5 text-sm font-semibold leading-6 text-slate-700">
-                {site_settings.announcement}
-              </div>
-            ) : null}
-
-            {noticeItems.length > 0 ? (
-              <div className="mt-5 flex max-w-5xl items-start gap-3 border-t border-slate-200 pt-4 text-sm leading-6 text-slate-600">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
-                <div className="min-w-0 sm:flex sm:gap-3">
-                  <span className="shrink-0 font-bold text-slate-800">购买须知</span>
-                  <div className="mt-1 grid gap-1 sm:mt-0 sm:flex sm:flex-wrap sm:gap-x-4">
-                    {noticeItems.map((notice) => (
-                      <span key={notice}>{notice}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-7">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-baseline gap-2.5">
-              <h2 className="truncate text-2xl font-black text-slate-950">
-                {currentCategoryName}
-              </h2>
-              <span className="shrink-0 text-sm font-medium tabular-nums text-slate-400">
-                {filteredProducts.length} 件
-              </span>
-            </div>
-
-            <div className="inline-flex shrink-0 rounded-md border border-slate-200 bg-white p-1 shadow-sm">
-              <Button
-                type="button"
-                size="icon"
-                variant={viewMode === "card" ? "default" : "ghost"}
-                className="h-8 w-8 shadow-none"
-                aria-label="卡片视图"
-                aria-pressed={viewMode === "card"}
-                title="卡片视图"
-                onClick={() => {
-                  setViewMode("card");
-                  setSearchTerm("");
-                }}
-              >
-                <Grid2X2 className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant={viewMode === "table" ? "default" : "ghost"}
-                className="h-8 w-8 shadow-none"
-                aria-label="表格视图"
-                aria-pressed={viewMode === "table"}
-                title="表格视图"
-                onClick={() => setViewMode("table")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {showCategoryFilter || viewMode === "table" ? (
-            <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              {showCategoryFilter ? (
-                <div
-                  className="flex gap-2 overflow-x-auto pb-1"
-                  role="tablist"
-                  aria-label="商品分类"
-                >
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={categoryId === "all" ? "default" : "outline"}
-                    className="shrink-0 shadow-none"
-                    role="tab"
-                    aria-selected={categoryId === "all"}
-                    onClick={() => setCategoryId("all")}
-                  >
-                    全部
-                    <span className="text-xs tabular-nums opacity-70">{products.length}</span>
-                  </Button>
-                  {availableCategories.map((category) => (
-                    <Button
-                      key={category.id}
-                      type="button"
-                      size="sm"
-                      variant={categoryId === category.id ? "default" : "outline"}
-                      className="shrink-0 shadow-none"
-                      role="tab"
-                      aria-selected={categoryId === category.id}
-                      onClick={() => setCategoryId(category.id)}
-                    >
-                      {category.name}
-                      <span className="text-xs tabular-nums opacity-70">
-                        {category.productCount}
-                      </span>
-                    </Button>
-                  ))}
+        {checkout_failed || site_settings.announcement || noticeItems.length > 0 ? (
+          <section className="border-b border-slate-200/80 bg-white/45">
+            <div className="mx-auto max-w-7xl space-y-3 px-4 py-3 md:px-6 md:py-4">
+              {checkout_failed ? (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  下单失败，请检查数据库、商品库存或支付配置。
                 </div>
               ) : null}
 
-              {viewMode === "table" ? (
-                <label className="relative w-full md:ml-auto md:max-w-xs">
+              {site_settings.announcement ? (
+                <div className="soft-banner px-4 py-2.5 text-sm font-semibold leading-6 text-slate-700">
+                  {site_settings.announcement}
+                </div>
+              ) : null}
+
+              {noticeItems.length > 0 ? (
+                <div className="flex items-start gap-3 text-sm leading-6 text-slate-600">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                  <div className="grid min-w-0 flex-1 gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-4">
+                    <span className="shrink-0 font-bold text-slate-800">购买须知</span>
+                    <div className="grid min-w-0 gap-x-8 gap-y-1 sm:grid-cols-2">
+                      {noticeItems.map((notice) => (
+                        <span key={notice} className="min-w-0 [overflow-wrap:anywhere]">{notice}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2.5">
+                  <h1 className="truncate text-2xl font-black text-slate-950">
+                    {currentCategoryName}
+                  </h1>
+                  <span
+                    className="shrink-0 text-sm font-medium tabular-nums text-slate-400"
+                    aria-live="polite"
+                  >
+                    {filteredProducts.length} 件
+                  </span>
+                </div>
+                <p className="mt-1 text-sm leading-6 text-slate-500 md:hidden">
+                  {site_settings.site_description}
+                </p>
+              </div>
+
+              <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:w-auto">
+                <label className="relative col-span-2 min-w-0 sm:w-56 sm:flex-none">
                   <span className="sr-only">搜索商品</span>
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
@@ -338,13 +330,133 @@ export function Storefront({
                     className="bg-white pl-9"
                   />
                 </label>
-              ) : null}
+                <div className="min-w-0 sm:w-40 sm:shrink-0">
+                  <NativeSelect
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as SortMode)}
+                    aria-label="商品排序"
+                  >
+                    <option value="default">默认排序</option>
+                    <option value="price_asc">价格从低到高</option>
+                    <option value="price_desc">价格从高到低</option>
+                    <option value="sales_desc">销量优先</option>
+                    <option value="newest">创建时间从新到旧</option>
+                  </NativeSelect>
+                </div>
+                <div
+                  className="inline-flex shrink-0 rounded-md border border-slate-200 bg-white p-1 shadow-sm"
+                  role="group"
+                  aria-label="商品展示方式"
+                >
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant={viewMode === "card" ? "default" : "ghost"}
+                    className={viewMode === "card"
+                      ? "h-10 w-10 bg-sky-700 shadow-none hover:bg-sky-800 sm:h-8 sm:w-8"
+                      : "h-10 w-10 shadow-none sm:h-8 sm:w-8"}
+                    aria-label="卡片视图"
+                    aria-pressed={viewMode === "card"}
+                    title="卡片视图"
+                    onClick={() => setViewMode("card")}
+                  >
+                    <Grid2X2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant={viewMode === "table" ? "default" : "ghost"}
+                    className={viewMode === "table"
+                      ? "h-10 w-10 bg-sky-700 shadow-none hover:bg-sky-800 sm:h-8 sm:w-8"
+                      : "h-10 w-10 shadow-none sm:h-8 sm:w-8"}
+                    aria-label="列表视图"
+                    aria-pressed={viewMode === "table"}
+                    title="列表视图"
+                    onClick={() => setViewMode("table")}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
-          ) : null}
+
+            <div className="flex min-w-0 items-center gap-3 border-t border-slate-200 pt-3">
+              <span className="hidden shrink-0 text-xs font-bold text-slate-500 sm:block">分类</span>
+              <div className="w-full sm:hidden">
+                <NativeSelect
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  aria-label="商品分类"
+                >
+                  <option value="all">全部分类（{products.length}）</option>
+                  {availableCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}（{category.productCount}）
+                    </option>
+                  ))}
+                  {uncategorizedCount > 0 ? (
+                    <option value={UNCATEGORIZED_ID}>未分类（{uncategorizedCount}）</option>
+                  ) : null}
+                </NativeSelect>
+              </div>
+              <div
+                className="hidden min-w-0 gap-2 overflow-x-auto pb-1 sm:flex"
+                role="group"
+                aria-label="商品分类"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={categoryId === "all" ? "default" : "outline"}
+                  className={categoryId === "all"
+                    ? "shrink-0 bg-sky-700 shadow-none hover:bg-sky-800"
+                    : "shrink-0 shadow-none"}
+                  aria-pressed={categoryId === "all"}
+                  onClick={() => setCategoryId("all")}
+                >
+                  全部
+                  <span className="text-xs tabular-nums opacity-70">{products.length}</span>
+                </Button>
+                {availableCategories.map((category) => (
+                  <Button
+                    key={category.id}
+                    type="button"
+                    size="sm"
+                    variant={categoryId === category.id ? "default" : "outline"}
+                    className={categoryId === category.id
+                      ? "shrink-0 bg-sky-700 shadow-none hover:bg-sky-800"
+                      : "shrink-0 shadow-none"}
+                    aria-pressed={categoryId === category.id}
+                    onClick={() => setCategoryId(category.id)}
+                  >
+                    {category.name}
+                    <span className="text-xs tabular-nums opacity-70">
+                      {category.productCount}
+                    </span>
+                  </Button>
+                ))}
+                {uncategorizedCount > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={categoryId === UNCATEGORIZED_ID ? "default" : "outline"}
+                    className={categoryId === UNCATEGORIZED_ID
+                      ? "shrink-0 bg-sky-700 shadow-none hover:bg-sky-800"
+                      : "shrink-0 shadow-none"}
+                    aria-pressed={categoryId === UNCATEGORIZED_ID}
+                    onClick={() => setCategoryId(UNCATEGORIZED_ID)}
+                  >
+                    未分类
+                    <span className="text-xs tabular-nums opacity-70">{uncategorizedCount}</span>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           <div className="mt-5">
-            {viewMode === "card" ? (
-              filteredProducts.length ? (
+            {filteredProducts.length ? (
+              viewMode === "card" ? (
                 <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
                   {filteredProducts.map((product) => (
                     <ProductCard
@@ -355,16 +467,25 @@ export function Storefront({
                   ))}
                 </div>
               ) : (
-                <div className="grid min-h-56 place-items-center rounded-md border border-dashed border-slate-300 bg-white/55 px-4 py-12 text-center">
-                  <div>
-                    <ShoppingBag className="mx-auto h-9 w-9 text-sky-400" />
-                    <div className="mt-3 text-base font-bold text-slate-800">暂无匹配商品</div>
-                    <div className="mt-1 text-sm text-slate-500">请切换分类或清空搜索关键词</div>
-                  </div>
-                </div>
+                <ProductTable products={filteredProducts} onOpen={openProduct} />
               )
             ) : (
-              <ProductTable products={filteredProducts} onOpen={openProduct} />
+              <div className="grid min-h-56 place-items-center rounded-md border border-dashed border-slate-300 bg-white/55 px-4 py-12 text-center">
+                <div>
+                  <ShoppingBag className="mx-auto h-9 w-9 text-sky-400" />
+                  <div className="mt-3 text-base font-bold text-slate-800">
+                    {hasActiveFilters ? "暂无匹配商品" : "暂无可售商品"}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    {hasActiveFilters ? "请调整分类、搜索词或排序条件" : "商品上架后会显示在这里"}
+                  </div>
+                  {hasActiveFilters ? (
+                    <Button type="button" variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                      清除筛选
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             )}
           </div>
         </section>
@@ -622,7 +743,7 @@ function ProductCard({
         className="group block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500"
         onClick={onOpen}
       >
-        <div className="relative h-28 overflow-hidden bg-sky-50 sm:h-32">
+        <div className={`relative overflow-hidden bg-sky-50 ${product.image_url ? "h-28 sm:h-32" : "h-20"}`}>
           {product.image_url ? (
             <img
               src={product.image_url}
@@ -693,9 +814,12 @@ function ProductTable({
           {products.length ? (
             <div className="divide-y divide-slate-100">
               {products.map((product) => (
-                <article
+                <button
+                  type="button"
                   key={product.id}
-                  className="grid gap-3 bg-white px-3 py-3.5 transition hover:bg-slate-50 sm:px-4 md:grid-cols-[minmax(0,1fr)_96px_80px_112px] md:items-center"
+                  onClick={() => onOpen(product)}
+                  aria-label={`${product.name}，${product.stock > 0 ? "购买" : "查看详情"}`}
+                  className="group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-white px-3 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 sm:px-4 md:grid-cols-[minmax(0,1fr)_96px_80px_112px] md:py-3.5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-sky-50 text-sky-500 ring-1 ring-sky-100">
@@ -706,17 +830,13 @@ function ProductTable({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => onOpen(product)}
-                        className="line-clamp-2 text-left text-[15px] font-bold leading-5 text-slate-950 hover:text-sky-600"
-                      >
+                      <h3 className="line-clamp-2 text-[15px] font-bold leading-5 text-slate-950 group-hover:text-sky-600">
                         {product.name}
-                      </button>
+                      </h3>
                       <p className="mt-1 line-clamp-1 text-[13px] text-slate-500">
                         {product.subtitle || product.description || "自动发货商品"}
                       </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <div className="mt-2 hidden flex-wrap gap-1.5 md:flex">
                         {product.stock > 0 ? (
                           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                             自动发货
@@ -731,26 +851,32 @@ function ProductTable({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
-                    <span className="text-xs font-semibold text-slate-400 md:hidden">价格</span>
-                    <span className="text-base font-bold text-slate-950">¥{Number(product.price).toFixed(2)}</span>
+                  <div className="text-right md:text-center">
+                    <span className="block text-base font-bold tabular-nums text-slate-950">
+                      ¥{Number(product.price).toFixed(2)}
+                    </span>
+                    <span className={`mt-1 block text-xs font-semibold tabular-nums md:hidden ${
+                      product.stock > 0 ? "text-slate-500" : "text-rose-600"
+                    }`}>
+                      {product.stock > 0 ? `库存 ${product.stock}` : "暂时售罄"}
+                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 md:block md:bg-transparent md:px-0 md:py-0 md:text-center">
-                    <span className="text-xs font-semibold text-slate-400 md:hidden">库存</span>
-                    <span>{product.stock}</span>
+                  <div className={`hidden text-center text-sm font-bold tabular-nums md:block ${
+                    product.stock > 0 ? "text-slate-500" : "text-rose-600"
+                  }`}>
+                    {product.stock}
                   </div>
 
-                  <Button
-                    type="button"
-                    onClick={() => onOpen(product)}
-                    disabled={product.stock < 1}
-                    className="h-10 w-full bg-sky-600 text-sm text-white shadow-none hover:bg-sky-700 active:bg-sky-800 disabled:bg-slate-200 disabled:text-slate-400 md:ml-auto md:w-24"
-                  >
+                  <span className={`ml-auto hidden h-10 w-24 items-center justify-center gap-2 rounded-md text-sm font-semibold md:inline-flex ${
+                    product.stock > 0
+                      ? "bg-sky-700 text-white"
+                      : "bg-slate-100 text-slate-500"
+                  }`}>
                     <ShoppingBag className="h-4 w-4" />
-                    购买
-                  </Button>
-                </article>
+                    {product.stock > 0 ? "购买" : "查看"}
+                  </span>
+                </button>
               ))}
             </div>
           ) : (
