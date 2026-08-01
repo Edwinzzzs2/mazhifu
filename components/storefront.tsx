@@ -223,8 +223,8 @@ export function Storefront({
     <div className="page-shell">
       {/* ── Header ── */}
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:h-16 md:px-6">
-          <a href="/" className="flex min-w-0 items-center gap-2.5 font-bold">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-3 sm:px-4 md:h-16 md:px-6">
+          <a href="/" className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden font-bold sm:gap-2.5">
             <span className="brand-mark h-8 w-8 md:h-9 md:w-9">
               {site_settings.site_logo_url ? (
                 <img
@@ -237,7 +237,7 @@ export function Storefront({
               )}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-lg leading-5 md:text-xl">
+              <span className="block truncate text-base leading-5 sm:text-lg md:text-xl">
                 {site_settings.site_name}
               </span>
               <span className="hidden max-w-sm truncate text-xs font-medium leading-5 text-slate-500 md:block">
@@ -245,21 +245,21 @@ export function Storefront({
               </span>
             </span>
           </a>
-          <nav className="flex items-center gap-1">
+          <nav className="ml-2 flex shrink-0 items-center gap-0.5 sm:gap-1">
             <SupportContact
               contact_email={site_settings.contact_email}
               contact_text={site_settings.contact_text}
             />
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm" className="h-9 w-9 px-0 md:w-auto md:px-3">
               <a href="/orders/query" aria-label="查询订单">
                 <Search className="h-4 w-4" />
-                <span className="hidden sm:inline">查订单</span>
+                <span className="hidden md:inline">查订单</span>
               </a>
             </Button>
-            <Button asChild variant="outline" size="sm" className="shadow-none">
+            <Button asChild variant="outline" size="sm" className="h-9 px-2.5 shadow-none md:px-3">
               <a href="/admin">
-                <span className="hidden sm:inline">管理后台</span>
-                <span className="sm:hidden">后台</span>
+                <span className="hidden md:inline">管理后台</span>
+                <span className="md:hidden">后台</span>
               </a>
             </Button>
           </nav>
@@ -269,7 +269,7 @@ export function Storefront({
       <main>
         {checkout_failed || site_settings.announcement || noticeItems.length > 0 ? (
           <section className="border-b border-slate-200/80 bg-white/45">
-            <div className="mx-auto max-w-7xl space-y-3 px-4 py-3 md:px-6 md:py-4">
+            <div className="mx-auto max-w-7xl space-y-2.5 px-3 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4">
               {checkout_failed ? (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   下单失败，请检查数据库、商品库存或支付配置。
@@ -283,11 +283,11 @@ export function Storefront({
               ) : null}
 
               {noticeItems.length > 0 ? (
-                <div className="flex items-start gap-3 text-sm leading-6 text-slate-600">
+                <div className="flex items-start gap-2.5 text-[13px] leading-5 text-slate-600 sm:gap-3 sm:text-sm sm:leading-6">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
-                  <div className="grid min-w-0 flex-1 gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-4">
+                  <div className="grid min-w-0 flex-1 gap-0.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-4">
                     <span className="shrink-0 font-bold text-slate-800">购买须知</span>
-                    <div className="grid min-w-0 gap-x-8 gap-y-1 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-x-8 gap-y-0.5 sm:grid-cols-2 sm:gap-y-1">
                       {noticeItems.map((notice) => (
                         <span key={notice} className="min-w-0 [overflow-wrap:anywhere]">{notice}</span>
                       ))}
@@ -299,12 +299,12 @@ export function Storefront({
           </section>
         ) : null}
 
-        <section className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-7">
-          <div className="flex flex-col gap-4">
+        <section className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-7">
+          <div className="flex flex-col gap-3 sm:gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="flex items-baseline gap-2.5">
-                  <h1 className="truncate text-2xl font-black text-slate-950">
+                  <h1 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
                     {currentCategoryName}
                   </h1>
                   <span
@@ -314,13 +314,13 @@ export function Storefront({
                     {filteredProducts.length} 件
                   </span>
                 </div>
-                <p className="mt-1 text-sm leading-6 text-slate-500 md:hidden">
+                <p className="mt-0.5 text-[13px] leading-5 text-slate-500 md:hidden sm:mt-1 sm:text-sm sm:leading-6">
                   {site_settings.site_description}
                 </p>
               </div>
 
-              <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center lg:w-auto">
-                <label className="relative col-span-2 min-w-0 sm:w-56 sm:flex-none">
+              <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:items-center lg:w-auto">
+                <label className="relative col-span-full min-w-0 sm:w-56 sm:flex-none">
                   <span className="sr-only">搜索商品</span>
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
@@ -330,6 +330,23 @@ export function Storefront({
                     className="bg-white pl-9"
                   />
                 </label>
+                <div className="min-w-0 sm:hidden">
+                  <NativeSelect
+                    value={categoryId}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    aria-label="商品分类"
+                  >
+                    <option value="all">全部分类（{products.length}）</option>
+                    {availableCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}（{category.productCount}）
+                      </option>
+                    ))}
+                    {uncategorizedCount > 0 ? (
+                      <option value={UNCATEGORIZED_ID}>未分类（{uncategorizedCount}）</option>
+                    ) : null}
+                  </NativeSelect>
+                </div>
                 <div className="min-w-0 sm:w-40 sm:shrink-0">
                   <NativeSelect
                     value={sortMode}
@@ -344,7 +361,7 @@ export function Storefront({
                   </NativeSelect>
                 </div>
                 <div
-                  className="inline-flex shrink-0 rounded-md border border-slate-200 bg-white p-1 shadow-sm"
+                  className="hidden shrink-0 rounded-md border border-slate-200 bg-white p-1 shadow-sm sm:inline-flex"
                   role="group"
                   aria-label="商品展示方式"
                 >
@@ -380,27 +397,10 @@ export function Storefront({
               </div>
             </div>
 
-            <div className="flex min-w-0 items-center gap-3 border-t border-slate-200 pt-3">
-              <span className="hidden shrink-0 text-xs font-bold text-slate-500 sm:block">分类</span>
-              <div className="w-full sm:hidden">
-                <NativeSelect
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  aria-label="商品分类"
-                >
-                  <option value="all">全部分类（{products.length}）</option>
-                  {availableCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}（{category.productCount}）
-                    </option>
-                  ))}
-                  {uncategorizedCount > 0 ? (
-                    <option value={UNCATEGORIZED_ID}>未分类（{uncategorizedCount}）</option>
-                  ) : null}
-                </NativeSelect>
-              </div>
+            <div className="hidden min-w-0 items-center gap-3 border-t border-slate-200 pt-3 sm:flex">
+              <span className="shrink-0 text-xs font-bold text-slate-500">分类</span>
               <div
-                className="hidden min-w-0 gap-2 overflow-x-auto pb-1 sm:flex"
+                className="flex min-w-0 gap-2 overflow-x-auto pb-1"
                 role="group"
                 aria-label="商品分类"
               >
@@ -454,10 +454,10 @@ export function Storefront({
             </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-3 sm:mt-5">
             {filteredProducts.length ? (
               viewMode === "card" ? (
-                <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
                   {filteredProducts.map((product) => (
                     <ProductCard
                       key={product.id}
@@ -502,18 +502,20 @@ export function Storefront({
           {/* Drawer panel:
                手机端：从底部弹出，圆角，最高 92vh
                PC端：从右侧滑入，最宽 4xl */}
-          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:h-[100dvh] sm:w-full sm:max-w-4xl sm:rounded-none sm:pb-0">
+          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl lg:inset-y-0 lg:inset-x-auto lg:right-0 lg:h-[100dvh] lg:w-full lg:max-w-4xl lg:rounded-none lg:pb-0">
             {/* 手机拖拽把手 */}
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
-            <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
-              <div>
+            <div className="flex min-w-0 shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="min-w-0">
                 <div className="text-xs font-semibold text-sky-600">商品详情</div>
                 <h2 className="mt-0.5 line-clamp-1 text-sm font-bold sm:text-base">{selectedProduct.name}</h2>
               </div>
               <button
+                type="button"
                 onClick={closeDrawer}
-                className="grid h-9 w-9 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="关闭商品详情"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -573,7 +575,7 @@ export function Storefront({
                 onSubmit={(e) => { void handleCheckout(e); }}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+                <div className="touch-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
                   {/* 手机端简要商品信息 */}
                   <div className="flex items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 p-3 lg:hidden">
                     {selectedProduct.image_url ? (
@@ -740,26 +742,26 @@ function ProductCard({
     <Card className="product-card">
       <button
         type="button"
-        className="group block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500"
+        className="group grid min-h-32 w-full grid-cols-[88px_minmax(0,1fr)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500 sm:block sm:min-h-0"
         onClick={onOpen}
       >
-        <div className={`relative overflow-hidden bg-sky-50 ${product.image_url ? "h-28 sm:h-32" : "h-20"}`}>
+        <div className={`relative min-h-32 overflow-hidden bg-sky-50 sm:min-h-0 ${product.image_url ? "sm:h-32" : "sm:h-20"}`}>
           {product.image_url ? (
             <img
               src={product.image_url}
               alt={product.name}
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 sm:group-hover:scale-[1.02]"
             />
           ) : (
             <div className="grid h-full place-items-center bg-sky-50">
-              <ShoppingBag className="h-9 w-9 text-sky-400" strokeWidth={1.5} />
+              <ShoppingBag className="h-7 w-7 text-sky-400 sm:h-9 sm:w-9" strokeWidth={1.5} />
             </div>
           )}
         </div>
 
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="line-clamp-2 min-h-10 text-[15px] font-bold leading-5 text-slate-950">
+        <div className="min-w-0 p-3.5 sm:p-4">
+          <div className="flex items-start justify-between gap-2 sm:gap-3">
+            <h3 className="line-clamp-1 min-w-0 text-[15px] font-bold leading-5 text-slate-950 sm:line-clamp-2 sm:min-h-10">
               {product.name}
             </h3>
             {product.badge ? (
@@ -768,14 +770,14 @@ function ProductCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 line-clamp-1 text-[13px] text-slate-500">
+          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500 sm:mt-1 sm:line-clamp-1 sm:text-[13px]">
             {product.subtitle || product.description}
           </p>
 
-          <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+          <div className="mt-3 flex items-end justify-between gap-2 sm:mt-4 sm:gap-3 sm:border-t sm:border-slate-100 sm:pt-3">
             <div className="leading-none text-sky-600">
               <span className="mr-0.5 text-xs">¥</span>
-              <span className="text-xl font-bold tabular-nums">
+              <span className="text-lg font-bold tabular-nums sm:text-xl">
                 {Number(product.price).toFixed(2)}
               </span>
             </div>
