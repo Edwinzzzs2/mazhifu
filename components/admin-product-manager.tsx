@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Archive,
   Boxes,
@@ -13,7 +13,6 @@ import {
   Plus,
   Save,
   Search,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +51,11 @@ type CategoryFormState = {
 };
 
 type ProductListSort = "display_order" | "newest" | "price_asc" | "price_desc" | "stock_desc" | "name";
+type ProductStatusFilter = "" | "active" | "inactive";
+type CategoryStatusFilter = "" | "active" | "inactive";
+type CategoryListSort = "display_order" | "name" | "product_count_desc";
+
+const UNCATEGORIZED_FILTER = "__uncategorized__";
 
 const PRODUCT_LIST_SORT_OPTIONS: Array<{ label: string; value: ProductListSort }> = [
   { label: "展示顺序", value: "display_order" },
@@ -60,6 +64,12 @@ const PRODUCT_LIST_SORT_OPTIONS: Array<{ label: string; value: ProductListSort }
   { label: "价格从高到低", value: "price_desc" },
   { label: "库存从多到少", value: "stock_desc" },
   { label: "名称 A 到 Z", value: "name" },
+];
+
+const CATEGORY_LIST_SORT_OPTIONS: Array<{ label: string; value: CategoryListSort }> = [
+  { label: "展示顺序", value: "display_order" },
+  { label: "名称 A 到 Z", value: "name" },
+  { label: "商品数量从多到少", value: "product_count_desc" },
 ];
 
 function toCategoryFormState(category?: CategoryRecord): CategoryFormState {
@@ -138,8 +148,12 @@ export function AdminProductManager({
   );
   const [form, setForm] = useState<ProductFormState>(toFormState(initial_products[0]));
   const [saving, setSaving] = useState(false);
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [productQuery, setProductQuery] = useState("");
   const [productListSort, setProductListSort] = useState<ProductListSort>("display_order");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("");
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("");
+  const editorRef = useRef<HTMLElement>(null);
 
   const activeProducts = useMemo(
     () => products.filter((product) => product.active).length,
@@ -147,13 +161,19 @@ export function AdminProductManager({
   );
   const visibleProducts = useMemo(() => {
     const normalizedQuery = productQuery.trim().toLowerCase();
-    const filtered = normalizedQuery
-      ? products.filter((product) =>
-          [product.name, product.subtitle, product.badge, product.category_name]
-            .filter((value): value is string => Boolean(value))
-            .some((value) => value.toLowerCase().includes(normalizedQuery)),
-        )
-      : products;
+    const filtered = products.filter((product) => {
+      const matchesQuery = !normalizedQuery
+        || [product.name, product.subtitle, product.badge, product.category_name]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLowerCase().includes(normalizedQuery));
+      const matchesCategory = !productCategoryFilter
+        || (productCategoryFilter === UNCATEGORIZED_FILTER
+          ? !product.category_id
+          : product.category_id === productCategoryFilter);
+      const matchesStatus = !productStatusFilter
+        || (productStatusFilter === "active" ? product.active : !product.active);
+      return matchesQuery && matchesCategory && matchesStatus;
+    });
     if (productListSort === "display_order") {
       return sortProductRecords(filtered, categories);
     }
@@ -173,22 +193,50 @@ export function AdminProductManager({
       }
       return left.name.localeCompare(right.name, "zh-CN") || left.id.localeCompare(right.id);
     });
-  }, [categories, productListSort, productQuery, products]);
+  }, [
+    categories,
+    productCategoryFilter,
+    productListSort,
+    productQuery,
+    products,
+    productStatusFilter,
+  ]);
+  const hasActiveProductFilters = Boolean(
+    productQuery
+    || productCategoryFilter
+    || productStatusFilter
+    || productListSort !== "display_order",
+  );
 
   function updateField(field: keyof ProductFormState, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearProductFilters() {
+    setProductQuery("");
+    setProductCategoryFilter("");
+    setProductStatusFilter("");
+    setProductListSort("display_order");
   }
 
   function startCreate() {
     setView("products");
     setSelectedProduct(null);
     setForm(toFormState());
+    setConfirmingDeactivate(false);
+    if (window.matchMedia("(max-width: 1279px)").matches) {
+      window.requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: "start" }));
+    }
   }
 
   function selectProduct(product: ProductRecord) {
     setView("products");
     setSelectedProduct(product);
     setForm(toFormState(product));
+    setConfirmingDeactivate(false);
+    if (window.matchMedia("(max-width: 1279px)").matches) {
+      window.requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: "start" }));
+    }
   }
 
   function upsertProduct(product: ProductRecord) {
@@ -246,6 +294,7 @@ export function AdminProductManager({
       upsertProduct(data.product);
       setSelectedProduct(data.product);
       setForm(toFormState(data.product));
+      setConfirmingDeactivate(false);
       toast.success("商品已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -272,6 +321,7 @@ export function AdminProductManager({
       upsertProduct(updated);
       setSelectedProduct(updated);
       setForm(toFormState(updated));
+      setConfirmingDeactivate(false);
       toast.success("商品已下架");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "下架失败");
@@ -305,6 +355,9 @@ export function AdminProductManager({
         : { ...currentProduct, category_id: null, category_name: null };
     });
     if (!category.active) {
+      if (productCategoryFilter === category.id) {
+        setProductCategoryFilter("");
+      }
       setForm((currentForm) => currentForm.category_id === category.id
         ? { ...currentForm, category_id: "" }
         : currentForm);
@@ -312,44 +365,63 @@ export function AdminProductManager({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="admin-panel overflow-hidden xl:sticky xl:top-5 xl:self-start">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
-          <div>
-            <div className="text-sm font-bold text-slate-900">
-              {view === "products" ? "商品管理" : "分类管理"}
-            </div>
-            <div className="mt-0.5 text-xs text-slate-500">
-              {view === "products" ? `共 ${products.length} 件商品` : `共 ${categories.length} 个分类`}
-            </div>
-          </div>
+    <div className="space-y-4">
+      <div className="admin-panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1 sm:w-72">
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "products" ? "default" : "ghost"}
+            onClick={() => {
+              setView("products");
+              setConfirmingDeactivate(false);
+            }}
+            className={view === "products" ? "shadow-none" : "bg-transparent"}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            商品
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "categories" ? "default" : "ghost"}
+            onClick={() => {
+              setView("categories");
+              setConfirmingDeactivate(false);
+            }}
+            className={view === "categories" ? "shadow-none" : "bg-transparent"}
+          >
+            <Boxes className="h-4 w-4" />
+            分类
+          </Button>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-xs text-slate-500 sm:justify-end">
+          <span>
+            {view === "products" ? `共 ${products.length} 件商品` : `共 ${categories.length} 个分类`}
+          </span>
           <Badge variant="secondary">
             {view === "products"
               ? `上架 ${activeProducts}`
               : `启用 ${categories.filter((category) => category.active).length}`}
           </Badge>
         </div>
-        <div className="space-y-3 border-b border-slate-100 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant={view === "products" ? "default" : "outline"}
-              onClick={() => setView("products")}
-              className="shadow-none"
-            >
-              <LayoutGrid className="h-4 w-4" />
-              商品管理
-            </Button>
-            <Button
-              variant={view === "categories" ? "default" : "outline"}
-              onClick={() => setView("categories")}
-              className="shadow-none"
-            >
-              <Boxes className="h-4 w-4" />
-              分类管理
-            </Button>
-          </div>
-          {view === "products" ? (
-            <>
+      </div>
+
+      {view === "categories" ? (
+        <CategoryManager categories={categories} products={products} onCategoryChange={syncCategory} />
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="admin-panel overflow-hidden xl:sticky xl:top-5 xl:self-start">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
+              <div>
+                <div className="text-sm font-bold text-slate-900">商品列表</div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  当前 {visibleProducts.length} / 共 {products.length} 件
+                </div>
+              </div>
+              <Badge variant="secondary">上架 {activeProducts}</Badge>
+            </div>
+            <div className="space-y-3 border-b border-slate-100 p-3">
               <Button type="button" variant="outline" onClick={startCreate} className="w-full shadow-none">
                 <Plus className="h-4 w-4" />
                 新增商品
@@ -361,9 +433,33 @@ export function AdminProductManager({
                   value={productQuery}
                   onChange={(event) => setProductQuery(event.target.value)}
                   className="h-9 pl-9"
-                  placeholder="搜索商品"
+                  placeholder="搜索名称、标签或分类"
                 />
               </label>
+              <div className="grid grid-cols-2 gap-2">
+                <NativeSelect
+                  value={productCategoryFilter}
+                  onChange={(event) => setProductCategoryFilter(event.target.value)}
+                  aria-label="按商品分类筛选"
+                  className="h-9"
+                >
+                  <option value="">全部分类</option>
+                  <option value={UNCATEGORIZED_FILTER}>未分类</option>
+                  {categories.filter((category) => category.active).map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </NativeSelect>
+                <NativeSelect
+                  value={productStatusFilter}
+                  onChange={(event) => setProductStatusFilter(event.target.value as ProductStatusFilter)}
+                  aria-label="按商品状态筛选"
+                  className="h-9"
+                >
+                  <option value="">全部状态</option>
+                  <option value="active">已上架</option>
+                  <option value="inactive">已下架</option>
+                </NativeSelect>
+              </div>
               <NativeSelect
                 value={productListSort}
                 onChange={(event) => setProductListSort(event.target.value as ProductListSort)}
@@ -374,82 +470,123 @@ export function AdminProductManager({
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </NativeSelect>
-            </>
-          ) : (
-            <p className="rounded-md bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-500">
-              分类内容已在右侧展开；停用分类前会提示受影响商品数量。
-            </p>
-          )}
-        </div>
-
-        {view === "products" ? (
-          <div className="touch-scroll max-h-[42vh] space-y-1.5 overflow-y-auto p-2 sm:max-h-72 xl:max-h-[calc(100vh-330px)]">
-            {visibleProducts.map((product) => {
-              const active = selectedProduct?.id === product.id;
-              return (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => selectProduct(product)}
-                  className={
-                    "w-full rounded-md border px-3 py-2.5 text-left transition " +
-                    (active
-                      ? "border-sky-200 bg-sky-50 ring-1 ring-inset ring-sky-100"
-                      : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50")
-                  }
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="line-clamp-1 text-sm font-bold">{product.name}</div>
-                      <div className="mt-1 line-clamp-1 text-xs font-medium text-sky-700">
-                        {product.category_name || "未分类"}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        ¥{Number(product.price).toFixed(2)} · 库存 {product.stock} · 排序 {product.sort_order}
-                      </div>
-                    </div>
-                    <span
-                      className={`mt-1 h-2 w-2 shrink-0 rounded-full ${product.active ? "bg-emerald-500" : "bg-slate-300"}`}
-                      title={product.active ? "已上架" : "已下架"}
-                    >
-                      <span className="sr-only">{product.active ? "已上架" : "已下架"}</span>
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-            {!visibleProducts.length ? (
-              <div className="px-3 py-10 text-center text-sm text-slate-400">没有匹配的商品</div>
-            ) : null}
-          </div>
-        ) : null}
-      </aside>
-
-      {view === "categories" ? (
-        <CategoryManager categories={categories} products={products} onCategoryChange={syncCategory} />
-      ) : (
-      <section className="admin-panel min-w-0">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
-              <Edit3 className="h-4 w-4" />
-              {selectedProduct ? "编辑商品" : "新增商品"}
+              {hasActiveProductFilters ? (
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-full text-xs" onClick={clearProductFilters}>
+                  清空筛选
+                </Button>
+              ) : null}
             </div>
-            <h2 className="mt-1 truncate text-lg font-bold text-slate-950">{form.name || "未命名商品"}</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-            {selectedProduct ? (
-              <Button variant="outline" onClick={deactivateSelectedProduct} disabled={saving} className="text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700">
-                <Trash2 className="h-4 w-4" />
-                下架
-              </Button>
+
+            <div className="touch-scroll max-h-[42vh] space-y-1.5 overflow-y-auto p-2 sm:max-h-72 xl:max-h-[calc(100vh-390px)]">
+              {visibleProducts.map((product) => {
+                const active = selectedProduct?.id === product.id;
+                return (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => selectProduct(product)}
+                    className={
+                      "w-full rounded-md border px-3 py-2.5 text-left transition " +
+                      (active
+                        ? "border-sky-200 bg-sky-50 ring-1 ring-inset ring-sky-100"
+                        : "border-transparent bg-white hover:border-slate-200 hover:bg-slate-50")
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="line-clamp-1 text-sm font-bold">{product.name}</div>
+                        <div className="mt-1 line-clamp-1 text-xs font-medium text-sky-700">
+                          {product.category_name || "未分类"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                          <span>¥{Number(product.price).toFixed(2)}</span>
+                          <span>库存 {product.stock}</span>
+                          <span>排序 {product.sort_order}</span>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={product.active
+                          ? "shrink-0 border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "shrink-0 border-slate-200 bg-slate-50 text-slate-500"}
+                      >
+                        {product.active ? "上架" : "下架"}
+                      </Badge>
+                    </div>
+                  </button>
+                );
+              })}
+              {!visibleProducts.length ? (
+                <div className="px-3 py-10 text-center text-sm text-slate-400">
+                  {products.length ? "没有匹配的商品" : "暂无商品，请先新增商品"}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+
+          <section ref={editorRef} className="admin-panel min-w-0 scroll-mt-4">
+            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5 lg:static">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
+                  <Edit3 className="h-4 w-4" />
+                  {selectedProduct ? "编辑商品" : "新增商品"}
+                </div>
+                <h2 className="mt-1 truncate text-lg font-bold text-slate-950">{form.name || "未命名商品"}</h2>
+              </div>
+              <div className={`grid gap-2 sm:flex sm:shrink-0 ${selectedProduct?.active ? "grid-cols-2" : "grid-cols-1"}`}>
+                {selectedProduct?.active ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmingDeactivate(true)}
+                    disabled={saving}
+                    className="text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                  >
+                    <EyeOff className="h-4 w-4" />
+                    下架
+                  </Button>
+                ) : null}
+                <Button onClick={saveProduct} disabled={saving} className="shadow-none">
+                  <Save className="h-4 w-4" />
+                  {saving ? "保存中" : "保存"}
+                </Button>
+              </div>
+            </div>
+
+            {confirmingDeactivate && selectedProduct ? (
+              <div
+                role="alert"
+                className="m-4 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 sm:mx-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-950">确认下架“{selectedProduct.name}”？</div>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">
+                    下架后不再出现在前台，历史订单和现有库存不会被删除。
+                  </p>
+                </div>
+                <div className="grid shrink-0 grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmingDeactivate(false)}
+                    disabled={saving}
+                    className="h-10 sm:h-9"
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={deactivateSelectedProduct}
+                    disabled={saving}
+                    className="h-10 bg-amber-700 text-white shadow-none hover:bg-amber-800 sm:h-9"
+                  >
+                    {saving ? "处理中" : "确认下架"}
+                  </Button>
+                </div>
+              </div>
             ) : null}
-            <Button onClick={saveProduct} disabled={saving} className="shadow-none">
-              <Save className="h-4 w-4" />
-              {saving ? "保存中" : "保存"}
-            </Button>
-          </div>
-        </div>
 
         <div className="grid gap-6 p-4 sm:p-5 2xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className="grid min-w-0 gap-6">
@@ -529,7 +666,7 @@ export function AdminProductManager({
             </label>
           </div>
 
-          <aside className="space-y-4 2xl:sticky 2xl:top-5 2xl:self-start">
+          <aside className="hidden space-y-4 lg:block 2xl:sticky 2xl:top-5 2xl:self-start">
             <div className="admin-panel-muted p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold">
                 <LayoutGrid className="h-4 w-4 text-sky-500" />
@@ -574,7 +711,8 @@ export function AdminProductManager({
 
           </aside>
         </div>
-      </section>
+          </section>
+        </div>
       )}
     </div>
   );
@@ -591,6 +729,9 @@ function CategoryManager({
 }) {
   const [createForm, setCreateForm] = useState<CategoryFormState>(toCategoryFormState());
   const [creating, setCreating] = useState(false);
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [categoryStatusFilter, setCategoryStatusFilter] = useState<CategoryStatusFilter>("");
+  const [categoryListSort, setCategoryListSort] = useState<CategoryListSort>("display_order");
   const canCreate = isCategoryFormValid(createForm);
   const productCountByCategory = useMemo(() => {
     const counts = new Map<string, number>();
@@ -601,12 +742,53 @@ function CategoryManager({
     });
     return counts;
   }, [products]);
+  const visibleCategories = useMemo(() => {
+    const normalizedQuery = categoryQuery.trim().toLowerCase();
+    const filtered = categories.filter((category) => {
+      const matchesQuery = !normalizedQuery
+        || category.name.toLowerCase().includes(normalizedQuery)
+        || category.slug.toLowerCase().includes(normalizedQuery);
+      const matchesStatus = !categoryStatusFilter
+        || (categoryStatusFilter === "active" ? category.active : !category.active);
+      return matchesQuery && matchesStatus;
+    });
+
+    return [...filtered].sort((left, right) => {
+      if (categoryListSort === "name") {
+        return left.name.localeCompare(right.name, "zh-CN")
+          || compareIntegerStrings(left.id, right.id);
+      }
+      if (categoryListSort === "product_count_desc") {
+        return (productCountByCategory.get(right.id) ?? 0) - (productCountByCategory.get(left.id) ?? 0)
+          || left.sort_order - right.sort_order
+          || compareIntegerStrings(left.id, right.id);
+      }
+      return left.sort_order - right.sort_order || compareIntegerStrings(left.id, right.id);
+    });
+  }, [
+    categories,
+    categoryListSort,
+    categoryQuery,
+    categoryStatusFilter,
+    productCountByCategory,
+  ]);
+  const hasActiveCategoryFilters = Boolean(
+    categoryQuery
+    || categoryStatusFilter
+    || categoryListSort !== "display_order",
+  );
 
   function updateCreateField(
     field: keyof CategoryFormState,
     value: string | boolean,
   ) {
     setCreateForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearCategoryFilters() {
+    setCategoryQuery("");
+    setCategoryStatusFilter("");
+    setCategoryListSort("display_order");
   }
 
   async function createCategory() {
@@ -644,29 +826,29 @@ function CategoryManager({
   return (
     <section className="admin-panel min-w-0">
       <div className="border-b border-slate-200 px-4 py-3.5 sm:px-5">
-        <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
-          <Boxes className="h-4 w-4" />
-          商品分组
-        </div>
-        <h2 className="mt-1 text-lg font-bold text-slate-950">分类管理</h2>
+        <h2 className="text-lg font-bold text-slate-950">分类列表</h2>
         <p className="mt-1 text-sm text-slate-500">
-          前台按启用分类筛选；停用分类会将其商品归入“未分类”。
+          启用分类会出现在前台筛选中，停用后关联商品转为未分类。
         </p>
       </div>
 
       <div className="grid gap-5 p-4 sm:p-5">
         <section className="rounded-md border border-sky-100 bg-sky-50/50 p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900">新建分类</h3>
               <p className="mt-0.5 text-xs text-slate-500">分类标识用于稳定识别，建议使用英文小写。</p>
             </div>
-            <Button onClick={createCategory} disabled={creating || !canCreate} className="h-10 shrink-0 shadow-none">
+            <Button
+              onClick={createCategory}
+              disabled={creating || !canCreate}
+              className="h-10 w-full shrink-0 shadow-none sm:w-auto"
+            >
               <Plus className="h-4 w-4" />
               {creating ? "创建中" : "创建分类"}
             </Button>
           </div>
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_140px]">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <AdminField label="分类名称 *">
               <Input
                 value={createForm.name}
@@ -706,14 +888,56 @@ function CategoryManager({
         </section>
 
         <section className="grid gap-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900">已有分类</h3>
               <p className="mt-0.5 text-xs text-slate-500">修改名称、标识或顺序后单独保存。</p>
             </div>
-            <Badge variant="secondary">共 {categories.length} 个</Badge>
+            <Badge variant="secondary" className="shrink-0">启用 {categories.filter((category) => category.active).length}</Badge>
           </div>
-          {categories.map((category) => (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(240px,1fr)_160px_220px_auto] lg:items-center">
+              <label className="relative block sm:col-span-2 lg:col-span-1">
+                <span className="sr-only">搜索分类名称或标识</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={categoryQuery}
+                  onChange={(event) => setCategoryQuery(event.target.value)}
+                  className="h-10 bg-white pl-9"
+                  placeholder="搜索分类名称或标识"
+                />
+              </label>
+              <NativeSelect
+                value={categoryStatusFilter}
+                onChange={(event) => setCategoryStatusFilter(event.target.value as CategoryStatusFilter)}
+                aria-label="按分类状态筛选"
+                className="bg-white"
+              >
+                <option value="">全部状态</option>
+                <option value="active">已启用</option>
+                <option value="inactive">已停用</option>
+              </NativeSelect>
+              <NativeSelect
+                value={categoryListSort}
+                onChange={(event) => setCategoryListSort(event.target.value as CategoryListSort)}
+                aria-label="分类列表排序"
+                className="bg-white"
+              >
+                {CATEGORY_LIST_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </NativeSelect>
+              <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm font-semibold text-slate-500 sm:col-span-2 lg:col-span-1 lg:justify-end">
+                <span>当前 {visibleCategories.length} / 共 {categories.length} 个</span>
+                {hasActiveCategoryFilters ? (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={clearCategoryFilters}>
+                    清空
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          {visibleCategories.map((category) => (
             <CategoryEditor
               key={category.id}
               category={category}
@@ -721,9 +945,9 @@ function CategoryManager({
               onCategoryChange={onCategoryChange}
             />
           ))}
-          {!categories.length ? (
+          {!visibleCategories.length ? (
             <div className="rounded-md border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-500">
-              暂无分类，请先新建一个分类。
+              {categories.length ? "没有匹配的分类，请调整搜索或筛选条件。" : "暂无分类，请先新建一个分类。"}
             </div>
           ) : null}
         </section>

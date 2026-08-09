@@ -147,6 +147,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
   const [batches, setBatches] = useState<CardSecretBatchStats[]>([]);
   const [stats, setStats] = useState<CardSecretStats>(emptyStats);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [pendingDelete, setPendingDelete] = useState<CardSecretRecord | null>(null);
@@ -210,11 +211,13 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
       setBatches([]);
       setStats(emptyStats);
       setTotal(0);
+      setLoadError("");
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setLoadError("");
     setCardSecrets([]);
     setPendingDelete(null);
     try {
@@ -277,8 +280,10 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
       setPageSize(nextPageSize);
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
+      const message = error instanceof Error ? error.message : "请稍后重试";
+      setLoadError(message);
       toast.error("读取发货库存失败", {
-        description: error instanceof Error ? error.message : "请稍后重试",
+        description: message,
       });
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
@@ -336,6 +341,15 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
     setBatches([]);
     setStats(emptyStats);
     setTotal(0);
+  }
+
+  function clearInventoryFilters() {
+    prepareViewChange({ status: "", query: "", batchFilter: null, page: 1 });
+    setStatus("");
+    setQuery("");
+    setQueryInput("");
+    setBatchFilter(null);
+    setPage(1);
   }
 
   function updateSort(nextKey: CardSecretSortKey) {
@@ -455,31 +469,31 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
 
   return (
     <section className="admin-panel min-w-0 overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
-            <PackageCheck className="h-4 w-4" />
-            发货库存
-          </div>
-          <h2 className="mt-1 truncate text-lg font-bold text-slate-950">
-            {selectedProduct ? selectedProduct.name : "选择商品后导入发货内容"}
-          </h2>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => { void loadInventory(currentViewRef.current); }}
-          disabled={loading}
-          className="w-full sm:w-auto"
-        >
-          <RefreshCw className={"h-4 w-4 " + (loading ? "animate-spin" : "")} />
-          刷新
-        </Button>
-      </div>
-
       <div className="border-b border-slate-200 bg-slate-50/60 px-4 py-4 sm:px-5">
-        <div className="grid gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.4fr)_repeat(4,minmax(110px,1fr))]">
-          <label className="grid gap-2 bg-white px-4 py-3 text-xs font-semibold text-slate-500">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <PackageCheck className="h-4 w-4 text-sky-600" />
+              库存概览
+            </div>
+            <p className="mt-0.5 truncate text-xs text-slate-500">
+              {selectedProduct ? selectedProduct.name : "选择商品后导入发货内容"}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => { void loadInventory(currentViewRef.current); }}
+            disabled={loading}
+            className="h-10 shrink-0 sm:h-9"
+          >
+            <RefreshCw className={"h-4 w-4 " + (loading ? "animate-spin" : "")} />
+            <span className="hidden sm:inline">刷新</span>
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 min-[360px]:grid-cols-2 xl:grid-cols-[minmax(240px,1.4fr)_repeat(4,minmax(110px,1fr))]">
+          <label className="col-span-full grid gap-2 bg-white px-4 py-3 text-xs font-semibold text-slate-500 xl:col-span-1">
             目标商品
             <NativeSelect
               className="h-9 py-1.5 font-semibold text-slate-800"
@@ -505,8 +519,8 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 sm:p-5 2xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="space-y-4 2xl:sticky 2xl:top-5 2xl:self-start">
+      <div className="grid gap-4 p-4 sm:p-5 min-[1800px]:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="space-y-4 min-[1800px]:sticky min-[1800px]:top-5 min-[1800px]:self-start">
           <Card className="shadow-sm">
             <CardHeader className="space-y-1.5 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -649,15 +663,14 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
           </div>
 
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_140px_190px_auto] md:items-center">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_140px_190px_auto] xl:items-center">
               <form
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:col-span-2 xl:col-span-1"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const nextQuery = queryInput.trim();
-                  prepareViewChange({ query: nextQuery, batchFilter: null, page: 1 });
+                  prepareViewChange({ query: nextQuery, page: 1 });
                   setQuery(nextQuery);
-                  setBatchFilter(null);
                   setPage(1);
                 }}
               >
@@ -696,9 +709,8 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                 value={status}
                 onChange={(event) => {
                   const nextStatus = event.target.value;
-                  prepareViewChange({ status: nextStatus, batchFilter: null, page: 1 });
+                  prepareViewChange({ status: nextStatus, page: 1 });
                   setStatus(nextStatus);
-                  setBatchFilter(null);
                   setPage(1);
                 }}
                 aria-label="库存状态"
@@ -720,11 +732,33 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </NativeSelect>
-              <div className="whitespace-nowrap text-sm font-semibold text-slate-500 md:text-right">
+              <div className="whitespace-nowrap text-sm font-semibold text-slate-500 sm:col-span-2 xl:col-span-1 xl:text-right">
                 当前 {cardSecrets.length} 条 / 共 {total} 条
               </div>
             </div>
           </div>
+
+          {loadError ? (
+            <div
+              role="alert"
+              className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-red-800">库存读取失败</div>
+                <p className="mt-1 break-words text-xs leading-5 text-red-700">{loadError}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-red-200 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+                onClick={() => { void loadInventory(currentViewRef.current); }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                重试
+              </Button>
+            </div>
+          ) : null}
 
           {pendingDelete ? (
             <div
@@ -763,7 +797,7 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
             </div>
           ) : null}
 
-          <div className="grid gap-3 lg:hidden">
+          <div className="grid gap-3 sm:grid-cols-2 2xl:hidden">
             {cardSecrets.length ? (
               cardSecrets.map((secret) => (
                 <InventoryCard
@@ -775,12 +809,16 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                   onDelete={() => setPendingDelete(secret)}
                 />
               ))
-            ) : (
-              <EmptyInventory loading={loading} />
+            ) : loadError ? null : (
+              <EmptyInventory
+                filtered={Boolean(status || query || batchFilter !== null)}
+                loading={loading}
+                onClearFilters={clearInventoryFilters}
+              />
             )}
           </div>
 
-          <div className="table-shell hidden lg:block">
+          <div className="table-shell hidden 2xl:block">
             <div className="touch-scroll max-h-[600px] overflow-auto">
               <table className="w-full min-w-[1120px] table-fixed border-collapse bg-white text-sm">
                 <colgroup>
@@ -884,10 +922,14 @@ export function AdminCardInventory({ products }: AdminCardInventoryProps) {
                         </td>
                       </tr>
                     ))
-                  ) : (
+                  ) : loadError ? null : (
                     <tr>
                       <td colSpan={7}>
-                        <EmptyInventory loading={loading} />
+                        <EmptyInventory
+                          filtered={Boolean(status || query || batchFilter !== null)}
+                          loading={loading}
+                          onClearFilters={clearInventoryFilters}
+                        />
                       </td>
                     </tr>
                   )}
@@ -1137,17 +1179,34 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EmptyInventory({ loading }: { loading: boolean }) {
+function EmptyInventory({
+  filtered,
+  loading,
+  onClearFilters,
+}: {
+  filtered: boolean;
+  loading: boolean;
+  onClearFilters: () => void;
+}) {
   return (
     <div className="grid min-h-48 place-items-center rounded-md border border-dashed border-slate-200 bg-white px-4 py-10 text-center">
       <div>
         <ClipboardList className="mx-auto h-8 w-8 text-slate-300" />
         <div className="mt-3 text-sm font-semibold text-slate-600">
-          {loading ? "正在读取库存" : "暂无发货内容"}
+          {loading ? "正在读取库存" : filtered ? "没有匹配的库存" : "暂无发货内容"}
         </div>
         <div className="mt-1 text-xs text-slate-400">
-          {loading ? "请稍候" : "选择左侧商品并导入后会显示在这里"}
+          {loading
+            ? "请稍候"
+            : filtered
+              ? "请调整批次、状态或搜索条件"
+              : "导入发货内容后会显示在这里"}
         </div>
+        {!loading && filtered ? (
+          <Button type="button" variant="outline" size="sm" className="mt-4" onClick={onClearFilters}>
+            清空筛选
+          </Button>
+        ) : null}
       </div>
     </div>
   );

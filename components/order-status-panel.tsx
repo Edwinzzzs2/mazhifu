@@ -89,7 +89,10 @@ export function OrderStatusPanel({
     };
   }, []);
 
-  const refreshStatus = useCallback(async (showFeedback = false) => {
+  const refreshStatus = useCallback(async (
+    showFeedback = false,
+    retryFulfillment = false,
+  ) => {
     if (activeRefresh.current) return;
 
     const requestOrderNo = order.out_trade_no;
@@ -99,7 +102,15 @@ export function OrderStatusPanel({
     try {
       const response = await fetch(
         `/api/orders/${encodeURIComponent(requestOrderNo)}/status`,
-        { cache: "no-store", signal: controller.signal },
+        retryFulfillment
+          ? {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "retry_fulfillment" }),
+              cache: "no-store",
+              signal: controller.signal,
+            }
+          : { cache: "no-store", signal: controller.signal },
       );
       if (!response.ok) {
         throw new Error("order_status_request_failed");
@@ -140,14 +151,13 @@ export function OrderStatusPanel({
   const waitingDelivery = paid && order.fulfillment_status === "pending";
 
   useEffect(() => {
-    const shouldPoll =
-      (order.status === "pending" || (paid && order.fulfillment_status !== "delivered"));
+    const shouldPoll = order.status === "pending" || waitingDelivery;
     if (!shouldPoll) return;
 
     void refreshStatus();
     const timer = window.setInterval(() => void refreshStatus(), 5000);
     return () => window.clearInterval(timer);
-  }, [order.fulfillment_status, order.status, paid, refreshStatus]);
+  }, [order.status, refreshStatus, waitingDelivery]);
 
   const status = delivered
     ? {
@@ -275,12 +285,18 @@ export function OrderStatusPanel({
           <Button
             type="button"
             variant="outline"
-            onClick={() => void refreshStatus(true)}
+            onClick={() => void refreshStatus(true, paid && !delivered)}
             disabled={refreshing}
             className="h-11 w-full shadow-none"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-            {refreshing ? "正在刷新" : expired ? "重新检查支付结果" : "刷新订单状态"}
+            {refreshing
+              ? "正在刷新"
+              : deliveryFailed
+                ? "重试发货"
+                : expired
+                  ? "重新检查支付结果"
+                  : "刷新订单状态"}
           </Button>
         )}
         <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
@@ -405,7 +421,7 @@ export function OrderStatusPanel({
             <Button
               type="button"
               variant={paid ? "default" : "outline"}
-              onClick={() => void refreshStatus(true)}
+              onClick={() => void refreshStatus(true, paid && !delivered)}
               disabled={refreshing}
               className={deliveryFailed
                 ? "h-11 bg-amber-700 shadow-none hover:bg-amber-800 sm:h-10"
@@ -414,7 +430,13 @@ export function OrderStatusPanel({
                   : "h-11 shadow-none sm:h-10"}
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-              {refreshing ? "正在刷新" : expired ? "重新检查支付结果" : "刷新订单状态"}
+              {refreshing
+                ? "正在刷新"
+                : deliveryFailed
+                  ? "重试发货"
+                  : expired
+                    ? "重新检查支付结果"
+                    : "刷新订单状态"}
             </Button>
           ) : delivered ? (
             <Button

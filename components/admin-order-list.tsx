@@ -24,6 +24,7 @@ import type {
   AdminOrderListResult,
   AdminOrderSort,
 } from "@/lib/orders";
+import type { ProductRecord } from "@/lib/products";
 
 const SORT_OPTIONS: Array<{ value: AdminOrderSort; label: string }> = [
   { value: "created_desc", label: "下单时间：最新优先" },
@@ -32,6 +33,25 @@ const SORT_OPTIONS: Array<{ value: AdminOrderSort; label: string }> = [
   { value: "money_asc", label: "订单金额：从低到高" },
   { value: "status_asc", label: "订单状态：待处理优先" },
 ];
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "", label: "全部" },
+  { value: "pending", label: "待付款" },
+  { value: "paid", label: "已付款" },
+  { value: "expired", label: "已过期" },
+  { value: "cancelled", label: "已取消" },
+];
+
+const FULFILLMENT_FILTER_OPTIONS = [
+  { value: "", label: "全部发货状态" },
+  { value: "pending", label: "未发货" },
+  { value: "delivered", label: "已发货" },
+  { value: "failed", label: "发货失败" },
+];
+
+type AdminOrderListProps = {
+  products: ProductRecord[];
+};
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   pending: { label: "待付款", className: "border-amber-200 bg-amber-50 text-amber-700" },
@@ -72,19 +92,93 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | "none" }) {
   return <ArrowUpDown className="h-3.5 w-3.5 text-slate-300" aria-hidden="true" />;
 }
 
+function EmptyOrders({
+  failed,
+  filtered,
+  loading,
+  onClear,
+}: {
+  failed: boolean;
+  filtered: boolean;
+  loading: boolean;
+  onClear: () => void;
+}) {
+  if (loading) {
+    return <div className="px-4 py-10 text-center text-sm text-slate-400">正在加载…</div>;
+  }
+
+  if (failed) {
+    return (
+      <div className="px-4 py-10 text-center text-sm text-slate-500">
+        暂时无法显示订单，请使用上方的“重试”。
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid justify-items-center gap-3 px-4 py-10 text-center">
+      <div>
+        <div className="text-sm font-semibold text-slate-600">
+          {filtered ? "没有符合筛选条件的订单" : "暂无订单"}
+        </div>
+        {filtered ? (
+          <p className="mt-1 text-xs text-slate-400">可以调整条件，或清空筛选查看全部订单。</p>
+        ) : null}
+      </div>
+      {filtered ? (
+        <Button type="button" variant="outline" size="sm" onClick={onClear}>
+          清空筛选
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function OperationalStatusPill({
+  status,
+  fulfillmentStatus,
+}: {
+  status: string;
+  fulfillmentStatus: string;
+}) {
+  const config = status === "paid"
+    ? fulfillmentStatus === "delivered"
+      ? { label: "已完成", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+      : fulfillmentStatus === "failed"
+        ? { label: "发货失败", className: "border-red-200 bg-red-50 text-red-700" }
+        : { label: "待发货", className: "border-sky-200 bg-sky-50 text-sky-700" }
+    : STATUS_LABELS[status]
+      ?? { label: status, className: "border-slate-200 bg-slate-100 text-slate-500" };
+
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${config.className}`}>
+      {config.label}
+    </span>
+  );
+}
+
 function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState("");
 
-  useEffect(() => {
+  const loadDetail = useCallback(async () => {
     setLoading(true);
-    adminFetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`)
-      .then((r) => r.json())
-      .then((data: AdminOrderDetail) => setDetail(data))
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
+    try {
+      const response = await adminFetch(`/api/admin/orders/${encodeURIComponent(outTradeNo)}`);
+      if (!response.ok) throw new Error("订单详情加载失败");
+      const data = (await response.json()) as AdminOrderDetail;
+      setDetail(data);
+    } catch {
+      setDetail(null);
+    } finally {
+      setLoading(false);
+    }
   }, [outTradeNo]);
+
+  useEffect(() => {
+    void loadDetail();
+  }, [loadDetail]);
 
   async function copyText(text: string, key: string) {
     await navigator.clipboard.writeText(text);
@@ -96,7 +190,15 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
     return <div className="px-4 py-4 text-sm text-slate-400 sm:px-6">正在加载订单详情…</div>;
   }
   if (!detail) {
-    return <div className="px-4 py-4 text-sm text-red-500 sm:px-6">加载失败</div>;
+    return (
+      <div className="flex items-center justify-between gap-3 px-4 py-4 text-sm text-red-600 sm:px-6">
+        <span>订单详情加载失败</span>
+        <Button type="button" variant="outline" size="sm" onClick={() => { void loadDetail(); }}>
+          <RefreshCw className="h-4 w-4" />
+          重试
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -185,23 +287,42 @@ function OrderDetailPanel({ outTradeNo }: { outTradeNo: string }) {
   );
 }
 
-export function AdminOrderList() {
+export function AdminOrderList({ products }: AdminOrderListProps) {
   const [orders, setOrders] = useState<AdminOrderListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [status, setStatus] = useState("");
+  const [productId, setProductId] = useState("");
+  const [fulfillmentStatus, setFulfillmentStatus] = useState("");
   const [q, setQ] = useState("");
   const [inputQ, setInputQ] = useState("");
   const [sort, setSort] = useState<AdminOrderSort>("created_desc");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const requestIdRef = useRef(0);
-  const currentQueryRef = useRef({ page, status, q, sort });
-  currentQueryRef.current = { page, status, q, sort };
+  const currentQueryRef = useRef({
+    page,
+    status,
+    q,
+    sort,
+    productId,
+    fulfillmentStatus,
+  });
+  currentQueryRef.current = {
+    page,
+    status,
+    q,
+    sort,
+    productId,
+    fulfillmentStatus,
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasActiveFilters = Boolean(status || productId || fulfillmentStatus || q);
+  const canClearFilters = hasActiveFilters || Boolean(inputQ.trim());
 
   const load = useCallback(
     async (
@@ -209,6 +330,8 @@ export function AdminOrderList() {
       nextStatus: string,
       nextQ: string,
       nextSort: AdminOrderSort,
+      nextProductId: string,
+      nextFulfillmentStatus: string,
     ) => {
       const requestId = ++requestIdRef.current;
       setLoading(true);
@@ -218,6 +341,10 @@ export function AdminOrderList() {
         url.searchParams.set("sort", nextSort);
         if (nextStatus) url.searchParams.set("status", nextStatus);
         if (nextQ) url.searchParams.set("q", nextQ);
+        if (nextProductId) url.searchParams.set("product_id", nextProductId);
+        if (nextFulfillmentStatus) {
+          url.searchParams.set("fulfillment_status", nextFulfillmentStatus);
+        }
         const resp = await adminFetch(url, { cache: "no-store" });
         const data = (await resp.json()) as AdminOrderListResult & { message?: string };
         if (!resp.ok) throw new Error(data.message ?? "加载失败");
@@ -227,9 +354,12 @@ export function AdminOrderList() {
         setPage(data.page ?? 1);
         setPageSize(data.page_size ?? 20);
         setSort(data.sort ?? nextSort);
-      } catch {
+        setLoadError("");
+      } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        toast.error("订单加载失败，请稍后重试");
+        const message = error instanceof Error ? error.message : "订单加载失败，请稍后重试";
+        setLoadError(message);
+        toast.error("订单加载失败", { description: message });
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
       }
@@ -238,14 +368,14 @@ export function AdminOrderList() {
   );
 
   useEffect(() => {
-    void load(1, status, q, sort);
-  }, [load, q, sort, status]);
+    void load(1, status, q, sort, productId, fulfillmentStatus);
+  }, [fulfillmentStatus, load, productId, q, sort, status]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const nextQ = inputQ.trim();
     if (nextQ === q) {
-      void load(1, status, nextQ, sort);
+      void load(1, status, nextQ, sort, productId, fulfillmentStatus);
     } else {
       setQ(nextQ);
     }
@@ -257,6 +387,42 @@ export function AdminOrderList() {
     setStatus(val);
     setPage(1);
     setExpandedId(null);
+  }
+
+  function handleProductChange(value: string) {
+    setProductId(value);
+    setPage(1);
+    setExpandedId(null);
+  }
+
+  function handleFulfillmentStatusChange(value: string) {
+    setFulfillmentStatus(value);
+    setPage(1);
+    setExpandedId(null);
+  }
+
+  function clearFilters() {
+    setInputQ("");
+    setExpandedId(null);
+    if (!hasActiveFilters) return;
+
+    setStatus("");
+    setProductId("");
+    setFulfillmentStatus("");
+    setQ("");
+    setPage(1);
+  }
+
+  function retryCurrentQuery() {
+    const current = currentQueryRef.current;
+    void load(
+      current.page,
+      current.status,
+      current.q,
+      current.sort,
+      current.productId,
+      current.fulfillmentStatus,
+    );
   }
 
   function handleSortChange(nextSort: AdminOrderSort) {
@@ -271,8 +437,7 @@ export function AdminOrderList() {
 
   function goPage(p: number) {
     const next = Math.max(1, Math.min(totalPages, p));
-    setPage(next);
-    void load(next, status, q, sort);
+    void load(next, status, q, sort, productId, fulfillmentStatus);
   }
 
   async function handleVerify(e: React.MouseEvent, outTradeNo: string) {
@@ -291,17 +456,29 @@ export function AdminOrderList() {
         marked_paid: "已确认支付成功",
         marked_expired: "确认未支付，已标记过期",
         no_change: "查询完成，状态未变",
+        payment_mismatch: "平台支付信息与本地订单不一致",
       };
       const actionLabel = actionLabels[data.action];
       const toastOptions = actionLabel ? undefined : { description: data.action };
-      if (data.action === "no_change") {
+      if (data.action === "payment_mismatch") {
+        toast.error(actionLabel ?? "支付信息不匹配", {
+          description: "订单状态未修改，请核对商户号、金额和订单号。",
+        });
+      } else if (data.action === "no_change") {
         toast.info(actionLabel || "操作完成", toastOptions);
       } else {
         toast.success(actionLabel || "操作完成", toastOptions);
       }
       // 核实期间筛选条件可能已经变化，始终刷新用户当前正在看的列表。
       const current = currentQueryRef.current;
-      void load(current.page, current.status, current.q, current.sort);
+      void load(
+        current.page,
+        current.status,
+        current.q,
+        current.sort,
+        current.productId,
+        current.fulfillmentStatus,
+      );
     } catch (err) {
       toast.error("网络错误", { description: String(err) });
     } finally {
@@ -311,47 +488,36 @@ export function AdminOrderList() {
 
   return (
     <section className="admin-panel min-w-0">
-      {/* 标题栏 */}
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
-            <ClipboardList className="h-4 w-4" />
-            订单记录
-          </div>
-          <h2 className="mt-1 truncate text-lg font-bold text-slate-950">
-            全部订单
-            {total > 0 && (
-              <span className="ml-2 text-sm font-normal text-slate-400">共 {total} 笔</span>
-            )}
-          </h2>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-900">
+          <ClipboardList className="h-4 w-4 shrink-0 text-sky-600" aria-hidden="true" />
+          <span>订单列表</span>
+          <span className="truncate text-xs font-medium text-slate-400">
+            {loading && total === 0 ? "正在读取" : `共 ${total} 笔`}
+          </span>
         </div>
         <Button
           type="button"
           variant="outline"
-          onClick={() => load(page, status, q, sort)}
+          size="sm"
+          onClick={retryCurrentQuery}
           disabled={loading}
-          className="w-full sm:w-auto"
+          className="h-10 shrink-0 sm:h-9"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          刷新
+          <span className="hidden sm:inline">刷新</span>
         </Button>
       </div>
 
       {/* 筛选栏 */}
       <div className="space-y-3 border-b border-slate-200 bg-slate-50/60 px-4 py-3 sm:px-5">
-        {/* 状态筛选 */}
+        {/* 支付状态筛选 */}
         <div
-          className="inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm"
+          className="touch-scroll inline-flex w-fit max-w-full gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm"
           role="group"
           aria-label="按支付状态筛选"
         >
-          {[
-            { value: "", label: "全部" },
-            { value: "pending", label: "待付款" },
-            { value: "paid", label: "已付款" },
-            { value: "expired", label: "已过期" },
-            { value: "cancelled", label: "已取消" },
-          ].map((item) => (
+          {PAYMENT_STATUS_OPTIONS.map((item) => (
             <button
               type="button"
               key={item.value}
@@ -368,13 +534,16 @@ export function AdminOrderList() {
           ))}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-[minmax(260px,1fr)_220px]">
+        <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-[minmax(260px,1fr)_minmax(160px,220px)_160px_220px_auto] 2xl:items-center">
           {/* 搜索 */}
-          <form onSubmit={handleSearch} className="flex min-w-0 gap-2">
+          <form
+            onSubmit={handleSearch}
+            className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 sm:col-span-2 2xl:col-span-1"
+          >
             <Input
-              className="h-10 min-w-0 flex-1 text-sm"
-              placeholder="搜索订单号或联系方式"
-              aria-label="搜索订单号或联系方式"
+              className="h-10 min-w-0"
+              placeholder="订单号 / 流水号 / 联系方式 / 商品名"
+              aria-label="搜索订单号、平台流水号、联系方式或商品名"
               value={inputQ}
               onChange={(e) => setInputQ(e.target.value)}
             />
@@ -383,6 +552,31 @@ export function AdminOrderList() {
               <span className="hidden sm:inline">搜索</span>
             </Button>
           </form>
+
+          <NativeSelect
+            value={productId}
+            onChange={(event) => handleProductChange(event.target.value)}
+            aria-label="按商品筛选订单"
+          >
+            <option value="">全部商品</option>
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}{product.active ? "" : "（已下架）"}
+              </option>
+            ))}
+          </NativeSelect>
+
+          <NativeSelect
+            value={fulfillmentStatus}
+            onChange={(event) => handleFulfillmentStatusChange(event.target.value)}
+            aria-label="按发货状态筛选订单"
+          >
+            {FULFILLMENT_FILTER_OPTIONS.map((option) => (
+              <option key={option.value || "all"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
 
           <NativeSelect
             value={sort}
@@ -395,17 +589,55 @@ export function AdminOrderList() {
               </option>
             ))}
           </NativeSelect>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!canClearFilters}
+            onClick={clearFilters}
+            className="shadow-none"
+          >
+            清空筛选
+          </Button>
         </div>
       </div>
 
+      {loadError ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 border-b border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+        >
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-red-800">订单加载失败</div>
+            <p className="mt-0.5 break-words text-xs leading-5 text-red-700">
+              {loadError}。当前列表可能不是最新数据。
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={retryCurrentQuery}
+            className="w-full border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-100 hover:text-red-800 sm:w-auto"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            重试
+          </Button>
+        </div>
+      ) : null}
+
       {/* 订单列表 */}
       <div className="overflow-hidden">
-        {/* 手机卡片视图 */}
-        <div className="divide-y divide-slate-100 md:hidden">
+        {/* 手机与窄屏卡片视图 */}
+        <div className="divide-y divide-slate-100 2xl:hidden">
           {orders.length === 0 ? (
-            <div className="px-4 py-10 text-center text-slate-400">
-              {loading ? "正在加载…" : "暂无订单"}
-            </div>
+            <EmptyOrders
+              failed={Boolean(loadError)}
+              filtered={hasActiveFilters}
+              loading={loading}
+              onClear={clearFilters}
+            />
           ) : (
             orders.map((order) => (
               <Fragment key={order.out_trade_no}>
@@ -447,24 +679,26 @@ export function AdminOrderList() {
                           {formatDate(order.created_at)}
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
-                        <StatusPill value={order.status} map={STATUS_LABELS} />
-                        <StatusPill value={order.fulfillment_status} map={FULFILLMENT_LABELS} />
-                      </div>
+                      <OperationalStatusPill
+                        status={order.status}
+                        fulfillmentStatus={order.fulfillment_status}
+                      />
                     </div>
                   </button>
-                  <div className="mt-2 flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="min-w-20 text-xs"
-                      disabled={verifyingId === order.out_trade_no}
-                      onClick={(e) => handleVerify(e, order.out_trade_no)}
-                    >
-                      <ShieldCheck className="h-3 w-3 shrink-0" />
-                      {verifyingId === order.out_trade_no ? "核实中" : "核实支付"}
-                    </Button>
-                  </div>
+                  {order.status === "pending" ? (
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="min-w-20 text-xs"
+                        disabled={verifyingId === order.out_trade_no}
+                        onClick={(e) => handleVerify(e, order.out_trade_no)}
+                      >
+                        <ShieldCheck className="h-3 w-3 shrink-0" />
+                        {verifyingId === order.out_trade_no ? "核实中" : "核实支付"}
+                      </Button>
+                    </div>
+                  ) : null}
                 </article>
                 {expandedId === order.out_trade_no && (
                   <div>
@@ -476,8 +710,8 @@ export function AdminOrderList() {
           )}
         </div>
 
-        {/* PC 表格视图 */}
-        <div className="hidden overflow-x-auto md:block">
+        {/* 超宽屏表格视图 */}
+        <div className="hidden overflow-x-auto 2xl:block">
           <table className="w-full min-w-[1120px] table-fixed border-collapse bg-white text-sm">
             <colgroup>
               <col className="w-12" />
@@ -566,8 +800,13 @@ export function AdminOrderList() {
             <tbody className="divide-y divide-slate-100">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
-                    {loading ? "正在加载…" : "暂无订单"}
+                  <td colSpan={10} className="p-0">
+                    <EmptyOrders
+                      failed={Boolean(loadError)}
+                      filtered={hasActiveFilters}
+                      loading={loading}
+                      onClear={clearFilters}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -618,16 +857,20 @@ export function AdminOrderList() {
                         {formatDate(order.created_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-20 text-xs"
-                          disabled={verifyingId === order.out_trade_no}
-                          onClick={(e) => handleVerify(e, order.out_trade_no)}
-                        >
-                          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                          {verifyingId === order.out_trade_no ? "核实中…" : "核实"}
-                        </Button>
+                        {order.status === "pending" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-20 text-xs"
+                            disabled={verifyingId === order.out_trade_no}
+                            onClick={(e) => handleVerify(e, order.out_trade_no)}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                            {verifyingId === order.out_trade_no ? "核实中…" : "核实"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-300">-</span>
+                        )}
                       </td>
                     </tr>
                     {expandedId === order.out_trade_no && (
@@ -655,7 +898,7 @@ export function AdminOrderList() {
             <Button
               variant="outline"
               size="sm"
-              disabled={page <= 1}
+              disabled={loading || page <= 1}
               onClick={() => goPage(page - 1)}
             >
               上一页
@@ -663,7 +906,7 @@ export function AdminOrderList() {
             <Button
               variant="outline"
               size="sm"
-              disabled={page >= totalPages}
+              disabled={loading || page >= totalPages}
               onClick={() => goPage(page + 1)}
             >
               下一页

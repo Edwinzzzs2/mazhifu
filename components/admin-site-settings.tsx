@@ -23,9 +23,15 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { adminFetch } from "@/lib/admin-client-auth";
-import type { AdminUser, AdminUserRole, InstanceGeneralSettings } from "@/lib/admin-auth";
+import type {
+  AdminUser,
+  AdminUserRole,
+  AdminUserStatus,
+  InstanceGeneralSettings,
+} from "@/lib/admin-auth";
 import type { SiteSettings } from "@/lib/site-settings";
 
 type AdminSiteSettingsProps = {
@@ -39,6 +45,15 @@ type UserDraft = {
   username: string;
   display_name: string;
   password: string;
+};
+
+type UserListSort = "updated_desc" | "created_desc" | "username";
+
+type PendingUserChange = {
+  description: string;
+  payload: { role: AdminUserRole } | { row_status: AdminUserStatus };
+  title: string;
+  userId: number;
 };
 
 function noticesToText(items: string[]) {
@@ -93,12 +108,37 @@ export function AdminSiteSettings({
   const [saving, setSaving] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [settingsSection, setSettingsSection] = useState<"site" | "access">("site");
+  const [userQuery, setUserQuery] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<"all" | AdminUserRole>("all");
+  const [userStatusFilter, setUserStatusFilter] = useState<"all" | AdminUserStatus>("all");
+  const [userListSort, setUserListSort] = useState<UserListSort>("updated_desc");
+  const [pendingUserChange, setPendingUserChange] = useState<PendingUserChange | null>(null);
 
   const previewNotices = useMemo(
     () => toPayload(settings, noticeText).notice_items,
     [noticeText, settings],
   );
+  const visibleUsers = useMemo(() => {
+    const normalizedQuery = userQuery.trim().toLowerCase();
+    const filtered = users.filter((user) => {
+      const matchesQuery = !normalizedQuery
+        || user.username.toLowerCase().includes(normalizedQuery)
+        || user.display_name.toLowerCase().includes(normalizedQuery);
+      const matchesRole = userRoleFilter === "all" || user.role === userRoleFilter;
+      const matchesStatus = userStatusFilter === "all" || user.row_status === userStatusFilter;
+      return matchesQuery && matchesRole && matchesStatus;
+    });
+
+    return [...filtered].sort((left, right) => {
+      if (userListSort === "username") {
+        return left.username.localeCompare(right.username, "zh-CN") || left.id - right.id;
+      }
+      const field = userListSort === "created_desc" ? "created_at" : "updated_at";
+      return new Date(right[field]).getTime() - new Date(left[field]).getTime() || right.id - left.id;
+    });
+  }, [userListSort, userQuery, userRoleFilter, userStatusFilter, users]);
 
   function updateField(field: TextField, value: string) {
     setSettings((current) => ({ ...current, [field]: value }));
@@ -228,7 +268,11 @@ export function AdminSiteSettings({
     }
   }
 
-  async function updateUser(userId: number, payload: Partial<AdminUser> & { password?: string }) {
+  async function updateUser(
+    userId: number,
+    payload: Partial<AdminUser> & { password?: string },
+  ): Promise<boolean> {
+    setUpdatingUserId(userId);
     try {
       const response = await adminFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
         method: "PATCH",
@@ -242,7 +286,7 @@ export function AdminSiteSettings({
 
       if (!response.ok || !data.user) {
         toast.error(data.message ?? "更新用户失败");
-        return;
+        return false;
       }
 
       const updatedUser = data.user;
@@ -258,8 +302,12 @@ export function AdminSiteSettings({
         }));
       }
       toast.success("用户已更新");
+      return true;
     } catch {
       toast.error("网络错误，更新用户失败");
+      return false;
+    } finally {
+      setUpdatingUserId((current) => (current === userId ? null : current));
     }
   }
 
@@ -276,41 +324,80 @@ export function AdminSiteSettings({
     });
   }
 
+  function clearUserFilters() {
+    setUserQuery("");
+    setUserRoleFilter("all");
+    setUserStatusFilter("all");
+    setUserListSort("updated_desc");
+  }
+
+  function requestRoleChange(user: AdminUser, role: AdminUserRole) {
+    if (role === user.role) return;
+    setPendingUserChange({
+      userId: user.id,
+      payload: { role },
+      title: role === "ADMIN" ? "确认授予管理员权限" : "确认取消管理员权限",
+      description: `${user.username} 将变更为${role === "ADMIN" ? "管理员" : "普通用户"}。`,
+    });
+  }
+
+  function requestStatusChange(user: AdminUser, rowStatus: AdminUserStatus) {
+    if (rowStatus === user.row_status) return;
+    setPendingUserChange({
+      userId: user.id,
+      payload: { row_status: rowStatus },
+      title: rowStatus === "NORMAL" ? "确认恢复账号" : "确认停用账号",
+      description: rowStatus === "NORMAL"
+        ? `${user.username} 将恢复正常使用。`
+        : `${user.username} 将无法继续使用该账号登录。`,
+    });
+  }
+
+  async function confirmUserChange() {
+    if (!pendingUserChange) return;
+    const updated = await updateUser(pendingUserChange.userId, pendingUserChange.payload);
+    if (updated) setPendingUserChange(null);
+  }
+
   return (
     <div className="space-y-4">
-      <div className="admin-panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="text-sm font-bold text-slate-900">设置分组</div>
-          <p className="mt-0.5 text-xs text-slate-500">按工作内容切换，减少无关表单干扰</p>
-        </div>
-        <div className="grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1 sm:w-72">
-          <Button
-            type="button"
-            size="sm"
-            variant={settingsSection === "site" ? "default" : "ghost"}
-            onClick={() => setSettingsSection("site")}
-            className={settingsSection === "site" ? "shadow-none" : "bg-transparent"}
-          >
-            <Store className="h-4 w-4" />
-            站点信息
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={settingsSection === "access" ? "default" : "ghost"}
-            onClick={() => setSettingsSection("access")}
-            className={settingsSection === "access" ? "shadow-none" : "bg-transparent"}
-          >
-            <Lock className="h-4 w-4" />
-            账号权限
-          </Button>
-        </div>
+      <div className="touch-scroll flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="设置分组">
+        <Button
+          type="button"
+          variant="ghost"
+          role="tab"
+          aria-selected={settingsSection === "site"}
+          onClick={() => setSettingsSection("site")}
+          className={`h-11 shrink-0 rounded-none border-b-2 px-4 shadow-none ${
+            settingsSection === "site"
+              ? "border-sky-600 bg-sky-50/70 text-sky-700"
+              : "border-transparent bg-transparent text-slate-500 hover:bg-slate-50"
+          }`}
+        >
+          <Store className="h-4 w-4" />
+          站点信息
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          role="tab"
+          aria-selected={settingsSection === "access"}
+          onClick={() => setSettingsSection("access")}
+          className={`h-11 shrink-0 rounded-none border-b-2 px-4 shadow-none ${
+            settingsSection === "access"
+              ? "border-sky-600 bg-sky-50/70 text-sky-700"
+              : "border-transparent bg-transparent text-slate-500 hover:bg-slate-50"
+          }`}
+        >
+          <Lock className="h-4 w-4" />
+          账号权限
+        </Button>
       </div>
 
       <div className={`grid gap-4 ${settingsSection === "site" ? "xl:grid-cols-[minmax(0,1fr)_320px]" : ""}`}>
         <div className="grid min-w-0 gap-4">
         <section className={`${settingsSection === "access" ? "admin-panel" : "hidden"} min-w-0`}>
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5 lg:static">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
                 <Lock className="h-4 w-4" />
@@ -318,29 +405,29 @@ export function AdminSiteSettings({
               </div>
               <h2 className="mt-1 truncate text-lg font-bold">登录与注册</h2>
             </div>
-            <Button onClick={saveAccessSettings} disabled={savingAccess} className="w-full shadow-none sm:w-auto">
+            <Button onClick={saveAccessSettings} disabled={savingAccess} className="shrink-0 shadow-none">
               <Save className="h-4 w-4" />
               {savingAccess ? "保存中" : "保存访问设置"}
             </Button>
           </div>
           <div className="grid gap-3 p-5">
             <AdminToggle
-              label="禁止用户注册"
-              description="开启后，首次管理员之外的公开注册会被后端拒绝。"
-              checked={generalSettings.disallow_user_registration}
-              onChange={(checked) => updateGeneralSetting("disallow_user_registration", checked)}
+              label="允许用户注册"
+              description="开启后，访客可以创建普通账号；首次管理员初始化不受影响。"
+              checked={!generalSettings.disallow_user_registration}
+              onChange={(checked) => updateGeneralSetting("disallow_user_registration", !checked)}
             />
             <AdminToggle
-              label="禁止普通用户密码登录"
-              description="开启后，普通 USER 账号不能使用密码登录；ADMIN 账号仍可进入后台。"
-              checked={generalSettings.disallow_password_auth}
-              onChange={(checked) => updateGeneralSetting("disallow_password_auth", checked)}
+              label="允许普通用户密码登录"
+              description="关闭后，仅管理员账号仍可通过密码进入后台。"
+              checked={!generalSettings.disallow_password_auth}
+              onChange={(checked) => updateGeneralSetting("disallow_password_auth", !checked)}
             />
             <AdminToggle
-              label="禁止修改用户名"
-              description="开启后，用户更新接口会拒绝 username 修改。"
-              checked={generalSettings.disallow_change_username}
-              onChange={(checked) => updateGeneralSetting("disallow_change_username", checked)}
+              label="允许修改用户名"
+              description="关闭后，账号只能修改昵称和密码，用户名保持不变。"
+              checked={!generalSettings.disallow_change_username}
+              onChange={(checked) => updateGeneralSetting("disallow_change_username", !checked)}
             />
           </div>
         </section>
@@ -354,7 +441,7 @@ export function AdminSiteSettings({
             <h2 className="mt-1 truncate text-lg font-bold">后台用户</h2>
           </div>
           <div className="grid gap-5 p-5">
-            <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1fr_140px_auto] md:items-end">
+            <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_140px_auto] xl:items-end">
               <AdminField label="用户名" icon={<UserPlus className="h-4 w-4" />}>
                 <Input
                   className="bg-white"
@@ -385,23 +472,105 @@ export function AdminSiteSettings({
                 />
               </AdminField>
               <AdminField label="角色" icon={<Lock className="h-4 w-4" />}>
-                <select
-                  className="admin-input bg-white"
+                <NativeSelect
+                  className="bg-white"
                   value={userForm.role}
                   onChange={(event) => updateUserForm("role", event.target.value)}
                 >
                   <option value="USER">普通用户</option>
                   <option value="ADMIN">管理员</option>
-                </select>
+                </NativeSelect>
               </AdminField>
-              <Button type="button" onClick={createUser} disabled={creatingUser} className="shadow-none">
+              <Button
+                type="button"
+                onClick={createUser}
+                disabled={creatingUser}
+                className="shadow-none sm:col-span-2 xl:col-span-1"
+              >
                 <UserPlus className="h-4 w-4" />
                 {creatingUser ? "创建中" : "创建用户"}
               </Button>
             </div>
 
+            <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_140px_140px_190px_auto] xl:items-center">
+              <label className="relative block sm:col-span-2 xl:col-span-1">
+                <span className="sr-only">搜索后台用户</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={userQuery}
+                  onChange={(event) => setUserQuery(event.target.value)}
+                  className="pl-9"
+                  placeholder="搜索用户名或昵称"
+                />
+              </label>
+              <NativeSelect
+                value={userRoleFilter}
+                onChange={(event) => setUserRoleFilter(event.target.value as "all" | AdminUserRole)}
+                aria-label="按角色筛选用户"
+              >
+                <option value="all">全部角色</option>
+                <option value="ADMIN">管理员</option>
+                <option value="USER">普通用户</option>
+              </NativeSelect>
+              <NativeSelect
+                value={userStatusFilter}
+                onChange={(event) => setUserStatusFilter(event.target.value as "all" | AdminUserStatus)}
+                aria-label="按状态筛选用户"
+              >
+                <option value="all">全部状态</option>
+                <option value="NORMAL">正常</option>
+                <option value="ARCHIVED">已停用</option>
+              </NativeSelect>
+              <NativeSelect
+                value={userListSort}
+                onChange={(event) => setUserListSort(event.target.value as UserListSort)}
+                aria-label="用户排序"
+              >
+                <option value="updated_desc">最近更新优先</option>
+                <option value="created_desc">最近创建优先</option>
+                <option value="username">用户名 A 到 Z</option>
+              </NativeSelect>
+              <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500 sm:col-span-2 xl:col-span-1 xl:justify-end">
+                <span className="whitespace-nowrap">当前 {visibleUsers.length} / 共 {users.length}</span>
+                {(userQuery || userRoleFilter !== "all" || userStatusFilter !== "all" || userListSort !== "updated_desc") ? (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={clearUserFilters}>
+                    清空
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {pendingUserChange ? (
+              <div role="alert" className="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-950">{pendingUserChange.title}</div>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">{pendingUserChange.description}</p>
+                </div>
+                <div className="grid shrink-0 grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={updatingUserId === pendingUserChange.userId}
+                    onClick={() => setPendingUserChange(null)}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={updatingUserId === pendingUserChange.userId}
+                    className="bg-amber-700 shadow-none hover:bg-amber-800"
+                    onClick={() => { void confirmUserChange(); }}
+                  >
+                    {updatingUserId === pendingUserChange.userId ? "处理中" : "确认修改"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-              {users.map((user) => {
+              {visibleUsers.map((user) => {
                 const draft = userDrafts[user.id] ?? {
                   username: user.username,
                   display_name: user.display_name,
@@ -409,7 +578,7 @@ export function AdminSiteSettings({
                 };
 
                 return (
-                  <div key={user.id} className="grid gap-3 border-b border-slate-100 p-4 text-sm last:border-b-0 lg:grid-cols-[1.1fr_1fr_1fr_96px_96px_96px] lg:items-end">
+                  <div key={user.id} className="grid gap-3 border-b border-slate-100 p-4 text-sm last:border-b-0 sm:grid-cols-2 xl:grid-cols-[1.1fr_1fr_1fr_112px_112px_96px] xl:items-end">
                     <label className="grid min-w-0 gap-1 text-xs font-bold text-slate-500">
                       用户名
                       <Input
@@ -440,35 +609,57 @@ export function AdminSiteSettings({
                         onChange={(event) => updateUserDraft(user.id, "password", event.target.value)}
                       />
                     </label>
+                    <label className="grid gap-1 text-xs font-bold text-slate-500">
+                      角色
+                      <NativeSelect
+                        value={user.role}
+                        disabled={updatingUserId === user.id}
+                        onChange={(event) => requestRoleChange(user, event.target.value as AdminUserRole)}
+                        aria-label={`${user.username} 的角色`}
+                      >
+                        <option value="USER">普通用户</option>
+                        <option value="ADMIN">管理员</option>
+                      </NativeSelect>
+                    </label>
+                    <label className="grid gap-1 text-xs font-bold text-slate-500">
+                      状态
+                      <NativeSelect
+                        value={user.row_status}
+                        disabled={updatingUserId === user.id}
+                        onChange={(event) => requestStatusChange(user, event.target.value as AdminUserStatus)}
+                        aria-label={`${user.username} 的状态`}
+                      >
+                        <option value="NORMAL">正常</option>
+                        <option value="ARCHIVED">已停用</option>
+                      </NativeSelect>
+                    </label>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="h-10 px-2 text-xs"
-                      onClick={() => updateUser(user.id, { role: user.role === "ADMIN" ? "USER" : "ADMIN" })}
+                      disabled={updatingUserId === user.id}
+                      onClick={() => saveUserDraft(user)}
+                      className="h-10 bg-sky-600 shadow-none hover:bg-sky-700"
                     >
-                      {user.role === "ADMIN" ? "管理员" : "普通用户"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 px-2 text-xs"
-                      onClick={() => updateUser(user.id, { row_status: user.row_status === "NORMAL" ? "ARCHIVED" : "NORMAL" })}
-                    >
-                      {user.row_status === "NORMAL" ? "正常" : "已停用"}
-                    </Button>
-                    <Button type="button" onClick={() => saveUserDraft(user)} className="h-10 bg-sky-600 shadow-none hover:bg-sky-700">
                       <Save className="h-4 w-4" />
-                      保存
+                      {updatingUserId === user.id ? "保存中" : "保存"}
                     </Button>
                   </div>
                 );
               })}
+              {!visibleUsers.length ? (
+                <div className="px-4 py-12 text-center">
+                  <div className="text-sm font-semibold text-slate-600">没有匹配的后台用户</div>
+                  <p className="mt-1 text-xs text-slate-400">请调整搜索、角色或账号状态</p>
+                  <Button type="button" variant="outline" size="sm" className="mt-4" onClick={clearUserFilters}>
+                    清空筛选
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
 
         <section className={`${settingsSection === "site" ? "admin-panel" : "hidden"} min-w-0`}>
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5 lg:static">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
                 <Settings2 className="h-4 w-4" />
@@ -476,7 +667,7 @@ export function AdminSiteSettings({
               </div>
               <h2 className="mt-1 truncate text-lg font-bold">{settings.site_name || "未命名站点"}</h2>
             </div>
-            <Button onClick={saveSettings} disabled={saving} className="w-full shadow-none sm:w-auto">
+            <Button onClick={saveSettings} disabled={saving} className="shrink-0 shadow-none">
               <Save className="h-4 w-4" />
               {saving ? "保存中" : "保存设置"}
             </Button>
@@ -587,7 +778,7 @@ export function AdminSiteSettings({
         </section>
       </div>
 
-      <aside className={`${settingsSection === "site" ? "space-y-4 xl:sticky xl:top-5 xl:self-start" : "hidden"}`}>
+      <aside className={`${settingsSection === "site" ? "hidden space-y-4 lg:block xl:sticky xl:top-5 xl:self-start" : "hidden"}`}>
         <div className="admin-panel p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-bold">
             <Store className="h-4 w-4 text-sky-500" />

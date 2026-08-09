@@ -104,18 +104,10 @@ export async function POST(
     action = "no_change";
   }
 
-  // 5. 查询更新后的订单返回
-  const updatedResult = await getPool().query<OrderRecord>(
-    "SELECT * FROM orders WHERE out_trade_no = $1",
-    [out_trade_no],
-  );
-
   const responsePayload = {
     action,
     new_status: newStatus,
     trade_no: tradeNo,
-    query_result: queryResult,
-    order: updatedResult.rows[0],
   };
 
   logger.info("response", {
@@ -125,5 +117,7 @@ export async function POST(
     trade_no: tradeNo,
   });
 
-  return NextResponse.json(responsePayload);
+  return NextResponse.json(responsePayload, {
+    headers: { "Cache-Control": "private, no-store" },
+  });
 }

@@ -23,7 +23,9 @@ export async function GET(
     if (!detail) {
       return NextResponse.json({ message: "订单不存在" }, { status: 404 });
     }
-    return NextResponse.json(detail);
+    return NextResponse.json(detail, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "查询订单失败";
     return NextResponse.json({ message }, { status: 500 });

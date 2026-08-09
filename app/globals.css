@@ -71,6 +71,11 @@ textarea {
     background: rgb(244 248 251);
   }
 
+  .admin-shell {
+    background:
+      linear-gradient(180deg, rgb(248 251 253) 0%, rgb(244 248 251) 28%, rgb(242 247 250) 100%);
+  }
+
   .brand-mark {
     display: grid;
     place-items: center;
@@ -202,22 +207,22 @@ textarea {
   }
 
   /* 管理后台底部 Tab 导航（手机专用） */
-  .admin-bottom-nav {
+  .admin-shell .admin-bottom-nav {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 50;
     display: flex;
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.97);
     border-top: 1px solid rgb(218 229 238);
     box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.08);
     backdrop-filter: blur(12px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .admin-bottom-nav a,
-  .admin-bottom-nav button {
+  .admin-shell .admin-bottom-nav a,
+  .admin-shell .admin-bottom-nav button {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -225,18 +230,40 @@ textarea {
     justify-content: center;
     gap: 3px;
     padding: 8px 4px;
-    font-size: 10px;
-    font-weight: 600;
+    position: relative;
+    font-size: 11px;
+    font-weight: 650;
     color: rgb(148 163 184);
-    transition: color 150ms ease;
+    transition: color 150ms ease, background-color 150ms ease;
     border: none;
     background: transparent;
     min-height: 56px;
   }
 
-  .admin-bottom-nav a.is-active,
-  .admin-bottom-nav a.is-active svg {
+  .admin-shell .admin-bottom-nav a.is-active,
+  .admin-shell .admin-bottom-nav a.is-active svg {
     color: rgb(2 132 199);
+  }
+
+  .admin-shell .admin-bottom-nav a.is-active {
+    background: rgb(240 249 255 / 0.72);
+  }
+
+  .admin-shell .admin-bottom-nav a.is-active::before {
+    position: absolute;
+    top: 0;
+    width: 24px;
+    height: 2px;
+    border-radius: 0 0 999px 999px;
+    background: rgb(2 132 199);
+    content: "";
+  }
+
+  .admin-shell .admin-bottom-nav a:focus-visible,
+  .admin-shell .admin-bottom-nav button:focus-visible {
+    z-index: 1;
+    outline: 2px solid rgb(14 165 233);
+    outline-offset: -3px;
   }
 
   @media (prefers-reduced-motion: reduce) {

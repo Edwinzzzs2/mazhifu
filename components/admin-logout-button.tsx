@@ -31,6 +31,7 @@ export function AdminLogoutButton({ className, icon_only = false }: AdminLogoutB
       className={className}
       disabled={submitting}
       onClick={handleLogout}
+      aria-label={icon_only ? (submitting ? "正在退出登录" : "退出登录") : undefined}
       title="退出登录"
     >
       <LogOut className="h-4 w-4" />

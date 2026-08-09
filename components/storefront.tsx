@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   Check,
   CheckCircle2,
   Clock3,
@@ -13,12 +14,14 @@ import {
   Mail,
   Minus,
   Plus,
+  RefreshCw,
   Search,
   ShieldCheck,
   ShoppingBag,
   X,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -903,38 +906,51 @@ function OrderTrackingModal({
 }) {
   const [order, setOrder] = useState<RemoteOrderStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryingFulfillment, setRetryingFulfillment] = useState(false);
   const [copied, setCopied] = useState(false);
   const stopRef = useRef(false);
   const fetchingRef = useRef(false);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (retryFulfillment = false) => {
     if (fetchingRef.current) return;  // 上一个还没返回，跳过
     fetchingRef.current = true;
+    if (retryFulfillment) setRetryingFulfillment(true);
     try {
       const url = `/api/orders/${encodeURIComponent(info.out_trade_no)}/status`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: info.email,
-          query_password: info.queryPassword,
-        }),
-        cache: "no-store",
-      });
+      const resp = await fetch(url, retryFulfillment
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "retry_fulfillment" }),
+            cache: "no-store",
+          }
+        : { cache: "no-store" });
       if (resp.ok) {
         const data = (await resp.json()) as RemoteOrderStatus;
         setOrder(data);
         // 终态：停止后续轮询
         if (
-          (data.status === "paid" && data.fulfillment_status === "delivered") ||
+          (data.status === "paid" && data.fulfillment_status !== "pending") ||
           data.status === "expired" ||
           data.status === "cancelled"
         ) {
           stopRef.current = true;
         }
+        if (retryFulfillment) {
+          if (data.fulfillment_status === "delivered") {
+            toast.success("补发完成，请及时保存发货内容");
+          } else {
+            toast.info("暂时仍无可用库存，请补货后再试");
+          }
+        }
+      } else if (retryFulfillment) {
+        toast.error("重试发货失败，请稍后再试");
       }
+    } catch {
+      if (retryFulfillment) toast.error("网络错误，请稍后再试");
     } finally {
       fetchingRef.current = false;
+      if (retryFulfillment) setRetryingFulfillment(false);
       setLoading(false);
     }
   }, [info]);
@@ -962,6 +978,7 @@ function OrderTrackingModal({
   const localExpired = !paid && order?.expires_at ? new Date(order.expires_at).getTime() <= Date.now() : false;
   const expired = serverExpired || localExpired;
   const delivered = paid && order?.fulfillment_status === "delivered";
+  const deliveryFailed = paid && order?.fulfillment_status === "failed";
 
   async function copyAll() {
     if (!order?.delivery_content.length) return;
@@ -1013,15 +1030,21 @@ function OrderTrackingModal({
               {/* Status icon */}
               <div
                 className={`flex flex-col items-center rounded-xl py-6 ${
-                  paid
+                  delivered
                     ? "bg-emerald-50"
+                    : deliveryFailed
+                      ? "bg-amber-50"
+                      : paid
+                        ? "bg-sky-50"
                     : expired
                       ? "bg-amber-50"
                       : "bg-sky-50"
                 }`}
               >
-                {paid ? (
+                {delivered ? (
                   <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+                ) : deliveryFailed ? (
+                  <AlertCircle className="h-12 w-12 text-amber-600" />
                 ) : expired ? (
                   <XCircle className="h-12 w-12 text-amber-500" />
                 ) : (
@@ -1030,8 +1053,10 @@ function OrderTrackingModal({
                 <div className="mt-3 text-lg font-bold">
                   {delivered
                     ? "支付成功，已发货"
-                    : paid
-                      ? "支付成功，未发货"
+                    : deliveryFailed
+                      ? "支付成功，等待补货"
+                      : paid
+                        ? "支付成功，自动发货中"
                       : expired
                         ? "订单已过期"
                         : "等待支付中…"}
@@ -1039,13 +1064,28 @@ function OrderTrackingModal({
                 <div className="mt-1 text-sm text-slate-500">
                   {delivered
                     ? "发货内容已生成，请及时保存"
-                    : paid
-                      ? "已到账，库存不足时请联系补发"
+                    : deliveryFailed
+                      ? "当前库存不足，补货后可重试发货"
+                      : paid
+                        ? "系统正在分配库存，请稍后查看"
                       : expired
                         ? "该订单已超时关闭，请返回重新下单"
                         : "我们正在等待您的支付确认"}
                 </div>
               </div>
+
+              {deliveryFailed ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { void fetchStatus(true); }}
+                  disabled={retryingFulfillment}
+                  className="h-11 w-full border-amber-200 bg-amber-50 text-amber-800 shadow-none hover:bg-amber-100 hover:text-amber-900"
+                >
+                  <RefreshCw className={`h-4 w-4 ${retryingFulfillment ? "animate-spin" : ""}`} aria-hidden="true" />
+                  {retryingFulfillment ? "正在重试" : "重试发货"}
+                </Button>
+              ) : null}
 
               {/* Order info */}
               <dl className="grid gap-2 rounded-lg border border-sky-100 p-4 text-sm">

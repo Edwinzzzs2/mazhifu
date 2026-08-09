@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listOrdersByQueryAuth } from "@/lib/orders";
+import {
+  createOrderQueryGrant,
+  listOrdersByQueryAuth,
+  listOrdersByQueryGrant,
+} from "@/lib/orders";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 
@@ -13,17 +17,51 @@ export async function POST(request: Request) {
   }
   const email = String(payload.email ?? "").trim().toLowerCase();
   const queryPassword = String(payload.query_password ?? "");
+  const queryGrant = String(payload.query_grant ?? "");
+  const requestedPage = Number(payload.page ?? 1);
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.min(10_000, Math.trunc(requestedPage)))
+    : 1;
 
-  if (!email || email.length > 120 || !queryPassword || queryPassword.length > 64) {
+  if (!queryGrant && (
+    !email
+    || email.length > 120
+    || queryPassword.length < 8
+    || queryPassword.length > 64
+  )) {
     return NextResponse.json({ message: "参数错误" }, { status: 400 });
   }
 
-  const rateLimit = await checkRateLimits([{
-    scope: "orders-query:client",
-    identifier: getClientRateLimitKey(request),
-    limit: 30,
-    windowSeconds: 600,
-  }]);
+  const clientKey = getClientRateLimitKey(request);
+  const rateLimit = await checkRateLimits(queryGrant
+    ? [
+        {
+          scope: "orders-query:grant-client",
+          identifier: clientKey,
+          limit: 60,
+          windowSeconds: 600,
+        },
+        {
+          scope: "orders-query:grant",
+          identifier: queryGrant,
+          limit: 60,
+          windowSeconds: 600,
+        },
+      ]
+    : [
+        {
+          scope: "orders-query:client",
+          identifier: clientKey,
+          limit: 30,
+          windowSeconds: 600,
+        },
+        {
+          scope: "orders-query:email-attempt",
+          identifier: email,
+          limit: 12,
+          windowSeconds: 600,
+        },
+      ]);
   if (!rateLimit.allowed) {
     logger.warn("client rate limited", { retry_after: rateLimit.retryAfter });
     return NextResponse.json(
@@ -35,9 +73,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const orders = await listOrdersByQueryAuth(email, queryPassword);
+  const result = queryGrant
+    ? await listOrdersByQueryGrant(queryGrant, page)
+    : await listOrdersByQueryAuth(email, queryPassword, page);
 
-  if (orders.length === 0) {
+  if (!result) {
+    return NextResponse.json(
+      { message: "查询凭据已过期，请重新输入查单密码" },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
+  if (!queryGrant && result.total === 0) {
     const failedAttemptLimit = await checkRateLimits([{
       scope: "orders-query:email-failed",
       identifier: email,
@@ -56,10 +103,14 @@ export async function POST(request: Request) {
     }
   }
 
-  logger.info("completed", { order_count: orders.length });
+  logger.info("completed", {
+    order_count: result.orders.length,
+    page: result.page,
+    total: result.total,
+  });
 
   return NextResponse.json({
-    orders: orders.map((o) => ({
+    orders: result.orders.map((o) => ({
       out_trade_no: o.out_trade_no,
       product_name: o.product_name,
       money: Number(o.money).toFixed(2),
@@ -70,5 +121,12 @@ export async function POST(request: Request) {
       created_at: o.created_at,
       paid_at: o.paid_at,
     })),
-  }, { headers: { "Cache-Control": "no-store" } });
+    total: result.total,
+    page: result.page,
+    page_size: result.page_size,
+    query_grant: result.total > 0
+      ? queryGrant || createOrderQueryGrant(email, queryPassword)
+      : undefined,
+    legacy_scan_pending: result.legacy_scan_pending,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

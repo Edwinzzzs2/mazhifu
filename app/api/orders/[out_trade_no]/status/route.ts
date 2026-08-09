@@ -31,6 +31,7 @@ async function getStatusResponse(
   request: Request,
   params: StatusRouteContext["params"],
   queryAuth?: { email: string; password: string },
+  retryFulfillment = false,
 ) {
   const clientKey = getClientRateLimitKey(request);
   const rules = [{
@@ -44,6 +45,13 @@ async function getStatusResponse(
       scope: "order-status:query-auth",
       identifier: `${params.out_trade_no}:${queryAuth.email.toLowerCase()}`,
       limit: 8,
+      windowSeconds: 600,
+    });
+  } else if (retryFulfillment) {
+    rules.push({
+      scope: "order-status:session-retry",
+      identifier: `${params.out_trade_no}:${clientKey}`,
+      limit: 6,
       windowSeconds: 600,
     });
   }
@@ -69,8 +77,12 @@ async function getStatusResponse(
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
   }
 
-  // 已支付但未发货时尝试发货
-  if (order.status === "paid" && order.fulfillment_status !== "delivered") {
+  // 只有显式的查询凭据 POST 才触发补发；GET 轮询始终保持只读。
+  if (
+    retryFulfillment
+    && order.status === "paid"
+    && order.fulfillment_status !== "delivered"
+  ) {
     try {
       await retryOrderFulfillment(order.out_trade_no);
       order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
@@ -83,7 +95,7 @@ async function getStatusResponse(
   }
 
   return NextResponse.json(toOrderStatusView(order), {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": "private, no-store" },
   });
 }
 
@@ -96,10 +108,15 @@ export async function POST(request: Request, { params }: StatusRouteContext) {
   if (!payload) {
     return NextResponse.json({ message: "invalid_query_auth" }, { status: 400 });
   }
+
+  if (payload.action === "retry_fulfillment") {
+    return getStatusResponse(request, params, undefined, true);
+  }
+
   const email = String(payload.email ?? "").trim().toLowerCase();
   const password = String(payload.query_password ?? "");
-  if (!email || email.length > 120 || !password || password.length > 64) {
+  if (!email || email.length > 120 || password.length < 8 || password.length > 64) {
     return NextResponse.json({ message: "invalid_query_auth" }, { status: 400 });
   }
-  return getStatusResponse(request, params, { email, password });
+  return getStatusResponse(request, params, { email, password }, true);
 }

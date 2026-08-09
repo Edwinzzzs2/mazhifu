@@ -61,11 +61,77 @@ function getQueryPasswordPepper() {
   return invalid ? "mazhifu-development-query-password-pepper" : pepper;
 }
 
-function getQueryPasswordLookup(password: string) {
+function createQueryPasswordLookup(password: string, pepper: string) {
   return crypto
-    .createHmac("sha256", getQueryPasswordPepper())
+    .createHmac("sha256", pepper)
     .update(password)
     .digest("hex");
+}
+
+function getQueryPasswordLookup(password: string) {
+  return createQueryPasswordLookup(password, getQueryPasswordPepper());
+}
+
+function getPreviousQueryPasswordLookups(password: string) {
+  return (process.env.ORDER_QUERY_PASSWORD_PREVIOUS_PEPPERS ?? "")
+    .split(",")
+    .map((pepper) => pepper.trim())
+    .filter((pepper) => pepper.length >= 32)
+    .map((pepper) => createQueryPasswordLookup(password, pepper));
+}
+
+const ORDER_QUERY_GRANT_TTL_SECONDS = 10 * 60;
+
+type OrderQueryGrantPayload = {
+  version: 1;
+  email: string;
+  lookup: string;
+  expires_at: number;
+};
+
+function signOrderQueryGrant(encodedPayload: string) {
+  return crypto
+    .createHmac("sha256", getQueryPasswordPepper())
+    .update(`order-query-grant:${encodedPayload}`)
+    .digest("base64url");
+}
+
+export function createOrderQueryGrant(email: string, queryPassword: string) {
+  const payload: OrderQueryGrantPayload = {
+    version: 1,
+    email: email.trim().toLowerCase(),
+    lookup: getQueryPasswordLookup(queryPassword),
+    expires_at: Math.floor(Date.now() / 1000) + ORDER_QUERY_GRANT_TTL_SECONDS,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${encodedPayload}.${signOrderQueryGrant(encodedPayload)}`;
+}
+
+function verifyOrderQueryGrant(token: string): OrderQueryGrantPayload | null {
+  const [encodedPayload, signature, ...extra] = token.split(".");
+  if (!encodedPayload || !signature || extra.length > 0 || token.length > 1024) return null;
+  if (!safeEqualText(signature, signOrderQueryGrant(encodedPayload))) return null;
+
+  try {
+    const payload = JSON.parse(
+      Buffer.from(encodedPayload, "base64url").toString("utf8"),
+    ) as Partial<OrderQueryGrantPayload>;
+    if (
+      payload.version !== 1
+      || typeof payload.email !== "string"
+      || !payload.email
+      || payload.email.length > 120
+      || typeof payload.lookup !== "string"
+      || !/^[a-f0-9]{64}$/i.test(payload.lookup)
+      || typeof payload.expires_at !== "number"
+      || payload.expires_at < Math.floor(Date.now() / 1000)
+    ) {
+      return null;
+    }
+    return payload as OrderQueryGrantPayload;
+  } catch {
+    return null;
+  }
 }
 
 function hashQueryPassword(password: string): string | null {
@@ -85,7 +151,19 @@ function isLegacyQueryPasswordHash(value: string | null) {
   return Boolean(value && /^[a-f0-9]{64}$/i.test(value));
 }
 
-function verifyQueryPassword(password: string, storedHash: string | null) {
+function deriveQueryPassword(password: string, salt: string) {
+  return new Promise<string>((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (error, derivedKey) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(derivedKey.toString("base64url"));
+    });
+  });
+}
+
+async function verifyQueryPasswordAsync(password: string, storedHash: string | null) {
   if (!password || !storedHash) return false;
   if (isLegacyQueryPasswordHash(storedHash)) {
     const legacyHash = crypto.createHash("sha256").update(password).digest("hex");
@@ -94,8 +172,15 @@ function verifyQueryPassword(password: string, storedHash: string | null) {
 
   const [version, salt, expectedHash] = storedHash.split("$");
   if (version !== "scrypt" || !salt || !expectedHash) return false;
-  const actualHash = crypto.scryptSync(password, salt, 64).toString("base64url");
+  const actualHash = await deriveQueryPassword(password, salt);
   return safeEqualText(actualHash, expectedHash);
+}
+
+async function hashQueryPasswordAsync(password: string): Promise<string | null> {
+  if (!password) return null;
+  const salt = crypto.randomBytes(16).toString("base64url");
+  const hash = await deriveQueryPassword(password, salt);
+  return `scrypt$${salt}$${hash}`;
 }
 
 async function upgradeLegacyQueryPassword(order: OrderRecord, password: string) {
@@ -108,7 +193,7 @@ async function upgradeLegacyQueryPassword(order: OrderRecord, password: string) 
      WHERE out_trade_no = $1 AND query_password_hash = $4`,
     [
       order.out_trade_no,
-      hashQueryPassword(password),
+      await hashQueryPasswordAsync(password),
       getQueryPasswordLookup(password),
       order.query_password_hash,
     ],
@@ -359,6 +444,8 @@ export async function getOrderViewByQueryAuth(
   email: string,
   queryPassword: string,
 ): Promise<OrderView | null> {
+  await ensureStoreSchema();
+
   const normalizedEmail = email.trim().toLowerCase();
   if (!outTradeNo || !normalizedEmail || !queryPassword) return null;
 
@@ -371,7 +458,7 @@ export async function getOrderViewByQueryAuth(
 
   if (order.contact.trim().toLowerCase() !== normalizedEmail) return null;
 
-  if (!verifyQueryPassword(queryPassword, order.query_password_hash)) return null;
+  if (!(await verifyQueryPasswordAsync(queryPassword, order.query_password_hash))) return null;
   await upgradeLegacyQueryPassword(order, queryPassword);
 
   const refreshed = await getPool().query<OrderRecord>(
@@ -396,51 +483,152 @@ export async function getOrderViewInternal(outTradeNo: string): Promise<OrderVie
   return { ...order, delivery_content: deliveryContent } satisfies OrderView;
 }
 
+export type OrderQueryListResult = {
+  orders: OrderView[];
+  total: number;
+  page: number;
+  page_size: number;
+  legacy_scan_pending: boolean;
+};
+
+const ORDER_QUERY_PAGE_SIZE = 20;
+
+async function loadOrdersByQueryLookup(
+  normalizedEmail: string,
+  lookup: string,
+  page: number,
+) {
+  const requestedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
+  const countResult = await getPool().query<{ total: string }>(
+    `SELECT COUNT(*)::text AS total
+     FROM orders
+     WHERE LOWER(contact) = $1 AND query_password_lookup = $2`,
+    [normalizedEmail, lookup],
+  );
+  const total = Number(countResult.rows[0]?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(total / ORDER_QUERY_PAGE_SIZE));
+  const normalizedPage = Math.min(requestedPage, totalPages);
+  const offset = (normalizedPage - 1) * ORDER_QUERY_PAGE_SIZE;
+  const result = await getPool().query<OrderRecord>(
+    `SELECT * FROM orders
+     WHERE LOWER(contact) = $1 AND query_password_lookup = $2
+     ORDER BY created_at DESC, out_trade_no DESC
+     LIMIT $3 OFFSET $4`,
+    [normalizedEmail, lookup, ORDER_QUERY_PAGE_SIZE, offset],
+  );
+  return { rows: result.rows, total, page: normalizedPage };
+}
+
+async function attachOrderDeliveryContent(orders: OrderRecord[]) {
+  return Promise.all(orders.map(async (order) => {
+    const deliveryContent =
+      order.status === "paid" ? await getDeliverySecrets(order.out_trade_no) : [];
+    return { ...order, delivery_content: deliveryContent } satisfies OrderView;
+  }));
+}
+
+export async function listOrdersByQueryGrant(
+  token: string,
+  page = 1,
+): Promise<OrderQueryListResult | null> {
+  await ensureStoreSchema();
+
+  const grant = verifyOrderQueryGrant(token);
+  if (!grant) return null;
+
+  const indexed = await loadOrdersByQueryLookup(grant.email, grant.lookup, page);
+  return {
+    orders: await attachOrderDeliveryContent(indexed.rows),
+    total: indexed.total,
+    page: indexed.page,
+    page_size: ORDER_QUERY_PAGE_SIZE,
+    legacy_scan_pending: false,
+  };
+}
+
 export async function listOrdersByQueryAuth(
   email: string,
   queryPassword: string,
-): Promise<OrderView[]> {
+  page = 1,
+): Promise<OrderQueryListResult> {
+  await ensureStoreSchema();
+
   const normalizedEmail = email.trim().toLowerCase();
-  if (!normalizedEmail || !queryPassword) return [];
+  if (!normalizedEmail || !queryPassword) {
+    return {
+      orders: [],
+      total: 0,
+      page: 1,
+      page_size: ORDER_QUERY_PAGE_SIZE,
+      legacy_scan_pending: false,
+    };
+  }
 
   const lookup = getQueryPasswordLookup(queryPassword);
   const legacyHash = crypto.createHash("sha256").update(queryPassword).digest("hex");
+  const previousLookups = getPreviousQueryPasswordLookups(queryPassword);
 
-  let result = await getPool().query<OrderRecord>(
-    `SELECT * FROM orders
-     WHERE LOWER(contact) = $1
-       AND (query_password_lookup = $2 OR query_password_hash = $3)
-     ORDER BY created_at DESC
-     LIMIT 20`,
-    [normalizedEmail, lookup, legacyHash],
-  );
-
-  // Pepper 轮换或旧数据缺少 lookup 时，用邮箱缩小范围后再校验慢哈希，并在成功后修复索引。
-  if (result.rows.length === 0) {
-    result = await getPool().query<OrderRecord>(
-      `SELECT * FROM orders
+  if (previousLookups.length > 0) {
+    await getPool().query(
+      `UPDATE orders
+       SET query_password_lookup = $3
        WHERE LOWER(contact) = $1
-       ORDER BY created_at DESC
-       LIMIT 100`,
-      [normalizedEmail],
+         AND query_password_lookup = ANY($2::text[])
+         AND query_password_lookup IS DISTINCT FROM $3`,
+      [normalizedEmail, previousLookups, lookup],
     );
   }
 
-  const views: OrderView[] = [];
-  for (const order of result.rows) {
-    if (!verifyQueryPassword(queryPassword, order.query_password_hash)) continue;
-    await upgradeLegacyQueryPassword(order, queryPassword);
-    if (order.query_password_lookup !== lookup) {
-      await getPool().query(
-        "UPDATE orders SET query_password_lookup = $2 WHERE out_trade_no = $1",
-        [order.out_trade_no, lookup],
-      );
-    }
-    const deliveryContent =
-      order.status === "paid" ? await getDeliverySecrets(order.out_trade_no) : [];
-    views.push({ ...order, delivery_content: deliveryContent } satisfies OrderView);
+  // 旧 SHA-256 记录可以直接按摘要命中，无需逐条慢哈希校验；先补齐 lookup，
+  // 让后续分页和短期查询授权都走同一条索引路径。
+  await getPool().query(
+    `UPDATE orders
+     SET query_password_lookup = $3
+     WHERE LOWER(contact) = $1
+       AND query_password_hash = $2
+       AND query_password_lookup IS DISTINCT FROM $3`,
+    [normalizedEmail, legacyHash, lookup],
+  );
+
+  // 兼容早期缺少 lookup 的 scrypt 记录。每次首次认证最多迁移 100 条，
+  // 并显式返回是否仍有候选，避免把不完整的历史结果伪装成最终全集。
+  const legacyResult = await getPool().query<OrderRecord>(
+    `SELECT * FROM orders
+     WHERE LOWER(contact) = $1
+       AND query_password_lookup IS NULL
+       AND query_password_hash IS NOT NULL
+     ORDER BY created_at DESC, out_trade_no DESC
+     LIMIT 101`,
+    [normalizedEmail],
+  );
+  const legacyScanPending = legacyResult.rows.length > 100;
+
+  for (const order of legacyResult.rows.slice(0, 100)) {
+    if (!(await verifyQueryPasswordAsync(queryPassword, order.query_password_hash))) continue;
+    await getPool().query(
+      `UPDATE orders
+       SET query_password_lookup = $2
+       WHERE out_trade_no = $1 AND query_password_lookup IS NULL`,
+      [order.out_trade_no, lookup],
+    );
   }
-  return views;
+
+  const indexed = await loadOrdersByQueryLookup(normalizedEmail, lookup, page);
+
+  const authenticatedOrders: OrderRecord[] = [];
+  for (const order of indexed.rows) {
+    if (!(await verifyQueryPasswordAsync(queryPassword, order.query_password_hash))) continue;
+    await upgradeLegacyQueryPassword(order, queryPassword);
+    authenticatedOrders.push(order);
+  }
+
+  return {
+    orders: await attachOrderDeliveryContent(authenticatedOrders),
+    total: indexed.total,
+    page: indexed.page,
+    page_size: ORDER_QUERY_PAGE_SIZE,
+    legacy_scan_pending: legacyScanPending,
+  };
 }
 
 async function assignCardSecretsForOrder(client: PoolClient, order: OrderRecord) {
@@ -734,7 +922,17 @@ export async function recordOrderQuery(outTradeNo: string, result: MapayQueryRes
   });
 }
 
-export type AdminOrderListItem = OrderRecord;
+export type AdminOrderListItem = Pick<
+  OrderRecord,
+  | "out_trade_no"
+  | "product_name"
+  | "money"
+  | "quantity"
+  | "contact"
+  | "status"
+  | "fulfillment_status"
+  | "created_at"
+>;
 
 export type AdminOrderSort =
   | "created_desc"
@@ -782,6 +980,8 @@ export async function listOrdersForAdmin(
   status = "",
   q = "",
   sort = "created_desc",
+  productId = "",
+  fulfillmentStatus = "",
 ): Promise<AdminOrderListResult> {
   await ensureStoreSchema();
 
@@ -789,6 +989,8 @@ export async function listOrdersForAdmin(
   const normalizedPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1;
   const offset = (normalizedPage - 1) * pageSize;
   const keyword = q.trim().slice(0, 120);
+  const normalizedProductId = productId.trim().slice(0, 120);
+  const normalizedFulfillmentStatus = fulfillmentStatus.trim();
   const normalizedSort = normalizeAdminOrderSort(sort);
   const orderBy = ADMIN_ORDER_SORT_SQL[normalizedSort];
 
@@ -801,8 +1003,23 @@ export async function listOrdersForAdmin(
     params.push(status);
   }
 
+  if (normalizedProductId) {
+    conditions.push(`product_id = $${idx++}`);
+    params.push(normalizedProductId);
+  }
+
+  if (normalizedFulfillmentStatus) {
+    conditions.push(`fulfillment_status = $${idx++}`);
+    params.push(normalizedFulfillmentStatus);
+  }
+
   if (keyword) {
-    conditions.push(`(out_trade_no ILIKE $${idx} OR contact ILIKE $${idx})`);
+    conditions.push(`(
+      out_trade_no ILIKE $${idx}
+      OR COALESCE(trade_no, '') ILIKE $${idx}
+      OR contact ILIKE $${idx}
+      OR product_name ILIKE $${idx}
+    )`);
     params.push(`%${keyword}%`);
     idx++;
   }
@@ -814,8 +1031,20 @@ export async function listOrdersForAdmin(
       `SELECT COUNT(*)::text AS total FROM orders ${where}`,
       params,
     ),
-    getPool().query<OrderRecord>(
-      `SELECT * FROM orders ${where} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
+    getPool().query<AdminOrderListItem>(
+      `SELECT
+        out_trade_no,
+        product_name,
+        money,
+        quantity,
+        contact,
+        status,
+        fulfillment_status,
+        created_at
+       FROM orders
+       ${where}
+       ORDER BY ${orderBy}
+       LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, pageSize, offset],
     ),
   ]);
@@ -829,15 +1058,39 @@ export async function listOrdersForAdmin(
   };
 }
 
-export type AdminOrderDetail = OrderRecord & {
+export type AdminOrderDetail = Pick<
+  OrderRecord,
+  | "out_trade_no"
+  | "contact"
+  | "pay_type"
+  | "status"
+  | "fulfillment_status"
+  | "trade_no"
+  | "created_at"
+  | "paid_at"
+  | "fulfilled_at"
+> & {
   delivery_secrets: string[];
 };
+
+type AdminOrderDetailRow = Omit<AdminOrderDetail, "delivery_secrets">;
 
 export async function getOrderDetailForAdmin(outTradeNo: string): Promise<AdminOrderDetail | null> {
   await ensureStoreSchema();
 
-  const result = await getPool().query<OrderRecord>(
-    "SELECT * FROM orders WHERE out_trade_no = $1",
+  const result = await getPool().query<AdminOrderDetailRow>(
+    `SELECT
+      out_trade_no,
+      contact,
+      pay_type,
+      status,
+      fulfillment_status,
+      trade_no,
+      created_at,
+      paid_at,
+      fulfilled_at
+     FROM orders
+     WHERE out_trade_no = $1`,
     [outTradeNo],
   );
 
