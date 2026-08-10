@@ -51,6 +51,7 @@ type QueryResponse = {
   page_size?: number;
   query_grant?: string;
   legacy_scan_pending?: boolean;
+  legacy_scan_cursor?: string | null;
   message?: string;
 };
 
@@ -462,6 +463,7 @@ export default function QueryOrderPage() {
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [legacyScanPending, setLegacyScanPending] = useState(false);
+  const [legacyScanCursor, setLegacyScanCursor] = useState("");
   const [failedPage, setFailedPage] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -471,6 +473,7 @@ export default function QueryOrderPage() {
     credentials: QueryCredentials,
     targetPage: number,
     preserveCurrentResults = false,
+    scanCursor = "",
   ) {
     setLoading(true);
     setError("");
@@ -482,12 +485,13 @@ export default function QueryOrderPage() {
       const response = await fetch("/api/orders/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials.queryGrant
+        body: JSON.stringify(credentials.queryGrant && !scanCursor
           ? { query_grant: credentials.queryGrant, page: targetPage }
           : {
               email: credentials.email,
               query_password: credentials.queryPassword,
               page: targetPage,
+              ...(scanCursor ? { legacy_scan_cursor: scanCursor } : {}),
             }),
         cache: "no-store",
       });
@@ -515,8 +519,9 @@ export default function QueryOrderPage() {
       if (data.query_grant) {
         setQueryCredentials({ ...credentials, queryGrant: data.query_grant });
       }
-      if (!credentials.queryGrant) {
+      if (!credentials.queryGrant || scanCursor) {
         setLegacyScanPending(Boolean(data.legacy_scan_pending));
+        setLegacyScanCursor(data.legacy_scan_cursor ?? "");
       }
     } catch {
       setError("网络错误，请稍后重试");
@@ -539,12 +544,18 @@ export default function QueryOrderPage() {
     setPage(1);
     setTotal(0);
     setLegacyScanPending(false);
+    setLegacyScanCursor("");
     await queryOrders(credentials, 1);
   }
 
   async function changePage(targetPage: number) {
     if (!queryCredentials || targetPage < 1) return;
     await queryOrders(queryCredentials, targetPage, true);
+  }
+
+  async function continueLegacyScan() {
+    if (!queryCredentials || !legacyScanCursor) return;
+    await queryOrders(queryCredentials, page, true, legacyScanCursor);
   }
 
   function updateOrder(nextOrder: OrderSummary) {
@@ -562,6 +573,7 @@ export default function QueryOrderPage() {
     setPageSize(20);
     setTotal(0);
     setLegacyScanPending(false);
+    setLegacyScanCursor("");
     setFailedPage(null);
     setError("");
     setQueried(false);
@@ -707,9 +719,23 @@ export default function QueryOrderPage() {
               </div>
 
               {legacyScanPending ? (
-                <div role="status" className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800 sm:px-4">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>检测到较多早期订单，当前结果可能未包含全部历史记录。可再次提交查询继续迁移，或联系售后协助核对。</span>
+                <div role="status" className="mb-3 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>检测到较多早期订单，当前结果可能未包含全部历史记录。可继续向后核对，或联系售后协助处理。</span>
+                  </div>
+                  {legacyScanCursor ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { void continueLegacyScan(); }}
+                      className="w-full shrink-0 border-amber-200 bg-white text-amber-800 shadow-none hover:bg-amber-100 hover:text-amber-900 sm:w-auto"
+                    >
+                      <Search className="h-3.5 w-3.5" aria-hidden="true" />
+                      继续查找早期订单
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
 

@@ -266,6 +266,12 @@ textarea {
     outline-offset: -3px;
   }
 
+  @media (min-width: 768px) {
+    .admin-shell .admin-bottom-nav {
+      display: none !important;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

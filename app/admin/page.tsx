@@ -112,10 +112,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   return (
     <div className="admin-shell page-shell flex">
-      {/* ── Sidebar（桌面可见，手机和平板隐藏）── */}
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-56 lg:shrink-0 lg:flex-col lg:border-r lg:border-slate-200 lg:bg-white">
+      {/* ── Sidebar（平板/窄桌面为图标栏，宽桌面展开）── */}
+      <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-16 md:shrink-0 md:flex-col md:border-r md:border-slate-200 md:bg-white xl:w-56">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2.5 border-b border-slate-200/80 px-4 font-bold">
+        <div className="flex h-16 items-center justify-center border-b border-slate-200/80 px-2 font-bold xl:justify-start xl:gap-2.5 xl:px-4">
           <span className="brand-mark h-9 w-9 shrink-0">
             {siteSettings.site_logo_url ? (
               <img src={siteSettings.site_logo_url} alt="" className="h-full w-full object-cover" />
@@ -123,20 +123,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <Store className="h-4 w-4" />
             )}
           </span>
-          <span className="min-w-0">
+          <span className="hidden min-w-0 xl:block">
             <span className="block truncate text-sm text-slate-950">{siteSettings.site_name}</span>
             <span className="block text-xs font-semibold text-slate-500">@{currentUser.username}</span>
           </span>
         </div>
 
         {/* Nav */}
-        <nav className="touch-scroll flex-1 space-y-1 overflow-y-auto p-3" aria-label="后台主导航">
+        <nav className="touch-scroll flex-1 space-y-1 overflow-y-auto p-2 xl:p-3" aria-label="后台主导航">
           {TABS.map(({ key, title, icon: Icon }) => (
             <Link
               key={key}
               href={`/admin?tab=${key}`}
               aria-current={tab === key ? "page" : undefined}
-              className={`relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors ${
+              title={title}
+              className={`relative flex items-center justify-center rounded-md px-2 py-2.5 text-sm font-semibold transition-colors xl:justify-start xl:gap-2.5 xl:px-3 ${
                 tab === key
                   ? "bg-sky-50 text-sky-700"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
@@ -144,28 +145,38 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             >
               {tab === key ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-sky-600" /> : null}
               <Icon className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden="true" />
-              {title}
+              <span className="hidden xl:inline">{title}</span>
             </Link>
           ))}
         </nav>
 
         {/* Footer */}
-        <div className="space-y-1 border-t border-slate-200/80 p-3">
+        <div className="space-y-1 border-t border-slate-200/80 p-2 xl:p-3">
           <Link
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700"
+            aria-label="在新窗口查看前台"
+            title="查看前台"
+            className="flex items-center justify-center rounded-md px-2 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700 xl:justify-start xl:gap-2.5 xl:px-3"
           >
             <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            查看前台
+            <span className="hidden xl:inline">查看前台</span>
           </Link>
-          <AdminLogoutButton className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700" />
+          <div className="xl:hidden">
+            <AdminLogoutButton
+              icon_only
+              className="flex w-full items-center justify-center rounded-md px-2 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700"
+            />
+          </div>
+          <div className="hidden xl:block">
+            <AdminLogoutButton className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-slate-500 hover:bg-sky-50 hover:text-sky-700" />
+          </div>
         </div>
       </aside>
 
       {/* ── Main content ── */}
-      <main className="min-w-0 flex-1 px-3 py-3 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 lg:px-5 lg:py-5 lg:pb-6 xl:px-6">
+      <main className="min-w-0 flex-1 px-3 py-3 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 md:pb-6 lg:px-5 lg:py-5 xl:px-6">
         <div className="mx-auto w-full max-w-[1720px]">
           {/* Page title */}
           <div className="mb-3 flex min-h-10 items-center justify-between gap-3 sm:mb-4">
@@ -183,7 +194,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
             </div>
             {/* 手机端顶部快捷入口 */}
-            <div className="flex shrink-0 items-center gap-2 lg:hidden">
+            <div className="flex shrink-0 items-center gap-2 md:hidden">
               <Link
                 href="/"
                 target="_blank"
@@ -207,7 +218,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </main>
 
       {/* ── 手机底部 Tab 栏 ── */}
-      <nav className="admin-bottom-nav lg:hidden" aria-label="后台移动导航">
+      <nav className="admin-bottom-nav md:hidden" aria-label="后台移动导航">
         {TABS.map(({ key, label, icon: Icon }) => (
           <Link
             key={key}

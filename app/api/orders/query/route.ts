@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   const email = String(payload.email ?? "").trim().toLowerCase();
   const queryPassword = String(payload.query_password ?? "");
   const queryGrant = String(payload.query_grant ?? "");
+  const legacyScanCursor = String(payload.legacy_scan_cursor ?? "");
   const requestedPage = Number(payload.page ?? 1);
   const page = Number.isFinite(requestedPage)
     ? Math.max(1, Math.min(10_000, Math.trunc(requestedPage)))
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
 
   const result = queryGrant
     ? await listOrdersByQueryGrant(queryGrant, page)
-    : await listOrdersByQueryAuth(email, queryPassword, page);
+    : await listOrdersByQueryAuth(email, queryPassword, page, legacyScanCursor);
 
   if (!result) {
     return NextResponse.json(
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!queryGrant && result.total === 0) {
+  if (!queryGrant && result.total === 0 && !result.legacy_scan_pending) {
     const failedAttemptLimit = await checkRateLimits([{
       scope: "orders-query:email-failed",
       identifier: email,
@@ -128,5 +129,6 @@ export async function POST(request: Request) {
       ? queryGrant || createOrderQueryGrant(email, queryPassword)
       : undefined,
     legacy_scan_pending: result.legacy_scan_pending,
+    legacy_scan_cursor: result.legacy_scan_cursor,
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

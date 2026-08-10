@@ -81,11 +81,20 @@ function getPreviousQueryPasswordLookups(password: string) {
 }
 
 const ORDER_QUERY_GRANT_TTL_SECONDS = 10 * 60;
+const LEGACY_ORDER_SCAN_CURSOR_TTL_SECONDS = 60 * 60;
 
 type OrderQueryGrantPayload = {
   version: 1;
   email: string;
   lookup: string;
+  expires_at: number;
+};
+
+type LegacyOrderScanCursorPayload = {
+  version: 1;
+  email: string;
+  created_at: string;
+  out_trade_no: string;
   expires_at: number;
 };
 
@@ -129,6 +138,72 @@ function verifyOrderQueryGrant(token: string): OrderQueryGrantPayload | null {
       return null;
     }
     return payload as OrderQueryGrantPayload;
+  } catch {
+    return null;
+  }
+}
+
+function createLegacyOrderScanCursor(
+  email: string,
+  order: Pick<OrderRecord, "created_at" | "out_trade_no">,
+) {
+  const payload: LegacyOrderScanCursorPayload = {
+    version: 1,
+    email,
+    created_at: order.created_at,
+    out_trade_no: order.out_trade_no,
+    expires_at: Math.floor(Date.now() / 1000) + LEGACY_ORDER_SCAN_CURSOR_TTL_SECONDS,
+  };
+  const key = crypto
+    .createHash("sha256")
+    .update(`legacy-order-scan:${getQueryPasswordPepper()}`)
+    .digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(Buffer.from("legacy-order-scan:v1"));
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, authTag, ciphertext]).toString("base64url");
+}
+
+function verifyLegacyOrderScanCursor(token: string, email: string) {
+  if (!token || token.length > 1024) return null;
+
+  try {
+    const packed = Buffer.from(token, "base64url");
+    if (packed.length <= 28) return null;
+    const key = crypto
+      .createHash("sha256")
+      .update(`legacy-order-scan:${getQueryPasswordPepper()}`)
+      .digest();
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      key,
+      packed.subarray(0, 12),
+    );
+    decipher.setAAD(Buffer.from("legacy-order-scan:v1"));
+    decipher.setAuthTag(packed.subarray(12, 28));
+    const plaintext = Buffer.concat([
+      decipher.update(packed.subarray(28)),
+      decipher.final(),
+    ]).toString("utf8");
+    const payload = JSON.parse(plaintext) as Partial<LegacyOrderScanCursorPayload>;
+    if (
+      payload.version !== 1
+      || payload.email !== email
+      || typeof payload.created_at !== "string"
+      || !payload.created_at
+      || typeof payload.out_trade_no !== "string"
+      || !payload.out_trade_no
+      || typeof payload.expires_at !== "number"
+      || payload.expires_at < Math.floor(Date.now() / 1000)
+    ) {
+      return null;
+    }
+    return payload as LegacyOrderScanCursorPayload;
   } catch {
     return null;
   }
@@ -489,6 +564,7 @@ export type OrderQueryListResult = {
   page: number;
   page_size: number;
   legacy_scan_pending: boolean;
+  legacy_scan_cursor: string | null;
 };
 
 const ORDER_QUERY_PAGE_SIZE = 20;
@@ -543,6 +619,7 @@ export async function listOrdersByQueryGrant(
     page: indexed.page,
     page_size: ORDER_QUERY_PAGE_SIZE,
     legacy_scan_pending: false,
+    legacy_scan_cursor: null,
   };
 }
 
@@ -550,6 +627,7 @@ export async function listOrdersByQueryAuth(
   email: string,
   queryPassword: string,
   page = 1,
+  legacyScanCursor = "",
 ): Promise<OrderQueryListResult> {
   await ensureStoreSchema();
 
@@ -561,6 +639,7 @@ export async function listOrdersByQueryAuth(
       page: 1,
       page_size: ORDER_QUERY_PAGE_SIZE,
       legacy_scan_pending: false,
+      legacy_scan_cursor: null,
     };
   }
 
@@ -592,16 +671,27 @@ export async function listOrdersByQueryAuth(
 
   // 兼容早期缺少 lookup 的 scrypt 记录。每次首次认证最多迁移 100 条，
   // 并显式返回是否仍有候选，避免把不完整的历史结果伪装成最终全集。
+  const verifiedLegacyCursor = legacyScanCursor
+    ? verifyLegacyOrderScanCursor(legacyScanCursor, normalizedEmail)
+    : null;
   const legacyResult = await getPool().query<OrderRecord>(
     `SELECT * FROM orders
      WHERE LOWER(contact) = $1
        AND query_password_lookup IS NULL
        AND query_password_hash IS NOT NULL
+       ${verifiedLegacyCursor
+         ? "AND (created_at, out_trade_no) < ($2::timestamptz, $3)"
+         : ""}
      ORDER BY created_at DESC, out_trade_no DESC
      LIMIT 101`,
-    [normalizedEmail],
+    verifiedLegacyCursor
+      ? [normalizedEmail, verifiedLegacyCursor.created_at, verifiedLegacyCursor.out_trade_no]
+      : [normalizedEmail],
   );
   const legacyScanPending = legacyResult.rows.length > 100;
+  const legacyScanCursorValue = legacyScanPending
+    ? createLegacyOrderScanCursor(normalizedEmail, legacyResult.rows[99])
+    : null;
 
   for (const order of legacyResult.rows.slice(0, 100)) {
     if (!(await verifyQueryPasswordAsync(queryPassword, order.query_password_hash))) continue;
@@ -628,6 +718,7 @@ export async function listOrdersByQueryAuth(
     page: indexed.page,
     page_size: ORDER_QUERY_PAGE_SIZE,
     legacy_scan_pending: legacyScanPending,
+    legacy_scan_cursor: legacyScanCursorValue,
   };
 }
 
