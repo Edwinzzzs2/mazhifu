@@ -20,7 +20,7 @@ export type MapayQueryResult = {
   [key: string]: unknown;
 };
 
-export const MAPAY_QUERY_TIMEOUT_MS = 8000;
+export const MAPAY_QUERY_TIMEOUT_MS = 20_000;
 const logger = createLogger("mapay");
 
 export function isAbortError(error: unknown) {
