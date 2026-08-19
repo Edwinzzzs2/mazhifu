@@ -259,12 +259,6 @@ export function Storefront({
                 <span className="hidden md:inline">查订单</span>
               </a>
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 px-2.5 shadow-none md:px-3">
-              <a href="/admin">
-                <span className="hidden md:inline">管理后台</span>
-                <span className="md:hidden">后台</span>
-              </a>
-            </Button>
           </nav>
         </div>
       </header>
