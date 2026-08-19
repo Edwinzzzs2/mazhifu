@@ -542,8 +542,7 @@ export function Storefront({
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <Metric label="已售" value={String(selectedProduct.sold_count)} />
+                <div className="grid grid-cols-2 gap-2">
                   <Metric label="现货" value={String(selectedProduct.stock)} accent />
                   <Metric label="单价" value={`¥${Number(selectedProduct.price).toFixed(2)}`} />
                 </div>
