@@ -24,19 +24,28 @@ import type { OrderStatusView } from "@/lib/order-status-view";
 type OrderStatusPanelProps = {
   initial_order: OrderStatusView;
   compact?: boolean;
+  payment_returned?: boolean;
 };
 
 type CopyTarget = "all" | number | null;
 
+type RefreshOptions = {
+  showFeedback?: boolean;
+  retryFulfillment?: boolean;
+  verifyPayment?: boolean;
+};
+
 export function OrderStatusPanel({
   initial_order,
   compact = false,
+  payment_returned = false,
 }: OrderStatusPanelProps) {
   const router = useRouter();
   const [order, setOrder] = useState(initial_order);
   const [refreshing, setRefreshing] = useState(false);
   const [copiedTarget, setCopiedTarget] = useState<CopyTarget>(null);
   const [locallyExpired, setLocallyExpired] = useState(false);
+  const [confirmingSlow, setConfirmingSlow] = useState(false);
   const currentOrderNo = useRef(initial_order.out_trade_no);
   const activeRefresh = useRef<AbortController | null>(null);
   const copyOperation = useRef(0);
@@ -58,6 +67,7 @@ export function OrderStatusPanel({
     setRefreshing(false);
     setCopiedTarget(null);
     setLocallyExpired(false);
+    setConfirmingSlow(false);
     setOrder(initial_order);
   }, [initial_order]);
 
@@ -89,10 +99,11 @@ export function OrderStatusPanel({
     };
   }, []);
 
-  const refreshStatus = useCallback(async (
+  const refreshStatus = useCallback(async ({
     showFeedback = false,
     retryFulfillment = false,
-  ) => {
+    verifyPayment = false,
+  }: RefreshOptions = {}) => {
     if (activeRefresh.current) return;
 
     const requestOrderNo = order.out_trade_no;
@@ -100,13 +111,18 @@ export function OrderStatusPanel({
     activeRefresh.current = controller;
     setRefreshing(true);
     try {
+      const action = verifyPayment
+        ? "verify_payment"
+        : retryFulfillment
+          ? "retry_fulfillment"
+          : null;
       const response = await fetch(
         `/api/orders/${encodeURIComponent(requestOrderNo)}/status`,
-        retryFulfillment
+        action
           ? {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "retry_fulfillment" }),
+              body: JSON.stringify({ action }),
               cache: "no-store",
               signal: controller.signal,
             }
@@ -128,11 +144,17 @@ export function OrderStatusPanel({
         router.refresh();
       }
       if (showFeedback) {
-        toast.success("订单状态已刷新");
+        if (verifyPayment && nextOrder.status !== "paid") {
+          toast.info("仍在确认支付结果", {
+            description: "支付平台暂未返回成功结果，请勿重复付款。",
+          });
+        } else {
+          toast.success(verifyPayment ? "支付已确认" : "订单状态已刷新");
+        }
       }
     } catch {
       if (!controller.signal.aborted && showFeedback) {
-        toast.error("状态刷新失败，请稍后重试");
+        toast.error(verifyPayment ? "支付核实失败，请稍后再试" : "状态刷新失败，请稍后重试");
       }
     } finally {
       if (activeRefresh.current === controller) {
@@ -149,15 +171,37 @@ export function OrderStatusPanel({
   const delivered = paid && order.fulfillment_status === "delivered";
   const deliveryFailed = paid && order.fulfillment_status === "failed";
   const waitingDelivery = paid && order.fulfillment_status === "pending";
+  const confirmingPayment = payment_returned
+    && (order.status === "pending" || order.status === "expired");
 
   useEffect(() => {
-    const shouldPoll = order.status === "pending" || waitingDelivery;
+    const activelyVerifyPayment = payment_returned
+      && (order.status === "pending" || order.status === "expired");
+    const shouldPoll = order.status === "pending" || waitingDelivery || activelyVerifyPayment;
     if (!shouldPoll) return;
 
-    void refreshStatus();
-    const timer = window.setInterval(() => void refreshStatus(), 5000);
+    let verificationAttempts = 0;
+    const poll = () => {
+      const verifyPayment = activelyVerifyPayment && verificationAttempts < 6;
+      if (verifyPayment) verificationAttempts += 1;
+      void refreshStatus({ verifyPayment });
+    };
+
+    poll();
+    const timer = window.setInterval(poll, activelyVerifyPayment ? 10_000 : 5_000);
     return () => window.clearInterval(timer);
-  }, [order.status, refreshStatus, waitingDelivery]);
+  }, [order.status, payment_returned, refreshStatus, waitingDelivery]);
+
+  useEffect(() => {
+    if (!confirmingPayment) {
+      setConfirmingSlow(false);
+      return;
+    }
+
+    setConfirmingSlow(false);
+    const timer = window.setTimeout(() => setConfirmingSlow(true), 60_000);
+    return () => window.clearTimeout(timer);
+  }, [confirmingPayment, order.out_trade_no]);
 
   const status = delivered
     ? {
@@ -189,7 +233,19 @@ export function OrderStatusPanel({
             iconClass: "bg-sky-600 text-white",
             eyebrowClass: "text-sky-700",
           }
-        : expired
+        : confirmingPayment
+          ? {
+              icon: RefreshCw,
+              eyebrow: "正在安全核实",
+              title: "支付结果确认中",
+              description: confirmingSlow
+                ? "支付结果同步较慢，但不代表付款失败。请勿重复付款，可点击下方按钮重新核实。"
+                : "支付平台已返回，正在同步支付结果。请勿重复付款，页面会自动更新。",
+              cardClass: "border-sky-200 bg-sky-50/80",
+              iconClass: "bg-sky-600 text-white",
+              eyebrowClass: "text-sky-700",
+            }
+          : expired
           ? {
               icon: CircleX,
               eyebrow: "订单已关闭",
@@ -256,7 +312,10 @@ export function OrderStatusPanel({
           <span
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-md shadow-sm ${status.iconClass}`}
           >
-            <StatusIcon className="h-5 w-5" aria-hidden="true" />
+            <StatusIcon
+              className={`h-5 w-5 ${confirmingPayment ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
           </span>
           <div className="min-w-0 pt-0.5">
             <p className={`text-xs font-semibold ${status.eyebrowClass}`}>{status.eyebrow}</p>
@@ -285,7 +344,11 @@ export function OrderStatusPanel({
           <Button
             type="button"
             variant="outline"
-            onClick={() => void refreshStatus(true, paid && !delivered)}
+            onClick={() => void refreshStatus({
+              showFeedback: true,
+              retryFulfillment: paid && !delivered,
+              verifyPayment: !paid,
+            })}
             disabled={refreshing}
             className="h-11 w-full shadow-none"
           >
@@ -294,9 +357,11 @@ export function OrderStatusPanel({
               ? "正在刷新"
               : deliveryFailed
                 ? "重试发货"
+                : confirmingPayment
+                  ? "立即核实支付结果"
                 : expired
-                  ? "重新检查支付结果"
-                  : "刷新订单状态"}
+                  ? "重新核实支付结果"
+                  : "我已支付，立即核实"}
           </Button>
         )}
         <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
@@ -409,7 +474,7 @@ export function OrderStatusPanel({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row">
-          {!paid && !expired ? (
+          {!paid && !expired && !confirmingPayment ? (
             <Button asChild className="h-11 bg-sky-700 shadow-none hover:bg-sky-800 sm:h-10">
               <Link href={`/pay/${encodeURIComponent(order.out_trade_no)}`}>
                 <CreditCard className="h-4 w-4" aria-hidden="true" />
@@ -420,12 +485,16 @@ export function OrderStatusPanel({
           {!delivered ? (
             <Button
               type="button"
-              variant={paid ? "default" : "outline"}
-              onClick={() => void refreshStatus(true, paid && !delivered)}
+              variant={paid || confirmingPayment ? "default" : "outline"}
+              onClick={() => void refreshStatus({
+                showFeedback: true,
+                retryFulfillment: paid && !delivered,
+                verifyPayment: !paid,
+              })}
               disabled={refreshing}
               className={deliveryFailed
                 ? "h-11 bg-amber-700 shadow-none hover:bg-amber-800 sm:h-10"
-                : waitingDelivery
+                : waitingDelivery || confirmingPayment
                   ? "h-11 bg-sky-700 shadow-none hover:bg-sky-800 sm:h-10"
                   : "h-11 shadow-none sm:h-10"}
             >
@@ -434,16 +503,18 @@ export function OrderStatusPanel({
                 ? "正在刷新"
                 : deliveryFailed
                   ? "重试发货"
+                  : confirmingPayment
+                    ? "立即核实支付结果"
                   : expired
-                    ? "重新检查支付结果"
-                    : "刷新订单状态"}
+                    ? "重新核实支付结果"
+                    : "我已支付，立即核实"}
             </Button>
           ) : delivered ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => void refreshStatus(true)}
+              onClick={() => void refreshStatus({ showFeedback: true })}
               disabled={refreshing}
               className="justify-start px-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             >

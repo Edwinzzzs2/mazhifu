@@ -4,9 +4,12 @@ import {
   getOrderViewByQueryAuth,
   getOrderViewInternal,
   getOrderViewWithSession,
+  markOrderFromQuery,
+  recordOrderQuery,
   retryOrderFulfillment,
 } from "@/lib/orders";
 import { getOrderSessionTokenFromRequest } from "@/lib/order-access";
+import { isAbortError, queryMapayOrder } from "@/lib/mapay";
 import { toOrderStatusView } from "@/lib/order-status-view";
 import { checkRateLimits, getClientRateLimitKey } from "@/lib/rate-limit";
 
@@ -19,19 +22,21 @@ type StatusRouteContext = {
 };
 
 /**
- * 订单状态查询接口 — 纯读取 DB 状态。
+ * 订单状态查询接口。
  *
  * 状态变更由以下两个机制驱动：
  * 1. 码支付回调 /api/pay/notify（主路径）
  * 2. Redis worker 定时对账（兜底）
  *
- * 本接口不主动调用码支付 API，避免不必要的外部请求。
+ * GET 轮询只读数据库；只有用户显式确认已付款时，受限的 POST 请求
+ * 才会主动查询码支付，避免回调延迟期间误导用户或产生重复付款。
  */
 async function getStatusResponse(
   request: Request,
   params: StatusRouteContext["params"],
   queryAuth?: { email: string; password: string },
   retryFulfillment = false,
+  verifyPayment = false,
 ) {
   const clientKey = getClientRateLimitKey(request);
   const rules = [{
@@ -47,12 +52,12 @@ async function getStatusResponse(
       limit: 8,
       windowSeconds: 600,
     });
-  } else if (retryFulfillment) {
+  } else if (retryFulfillment || verifyPayment) {
     rules.push({
-      scope: "order-status:session-retry",
+      scope: verifyPayment ? "order-status:payment-verify" : "order-status:session-retry",
       identifier: `${params.out_trade_no}:${clientKey}`,
-      limit: 6,
-      windowSeconds: 600,
+      limit: verifyPayment ? 8 : 6,
+      windowSeconds: verifyPayment ? 60 : 600,
     });
   }
   const rateLimit = await checkRateLimits(rules);
@@ -77,7 +82,35 @@ async function getStatusResponse(
     return NextResponse.json({ message: "order_not_found" }, { status: 404 });
   }
 
-  // 只有显式的查询凭据 POST 才触发补发；GET 轮询始终保持只读。
+  if (
+    verifyPayment
+    && (order.status === "pending" || order.status === "expired")
+  ) {
+    try {
+      const queryResult = await queryMapayOrder(order.out_trade_no);
+      const markedPaid = await markOrderFromQuery(queryResult, order.out_trade_no);
+
+      if (markedPaid) {
+        await retryOrderFulfillment(order.out_trade_no);
+      } else {
+        await recordOrderQuery(order.out_trade_no, queryResult);
+      }
+
+      order = (await getOrderViewInternal(params.out_trade_no)) ?? order;
+    } catch (error) {
+      logger.error("payment verification failed", {
+        error,
+        out_trade_no: order.out_trade_no,
+        timeout: isAbortError(error),
+      });
+      return NextResponse.json(
+        { message: isAbortError(error) ? "payment_verification_timeout" : "payment_verification_failed" },
+        { status: 502 },
+      );
+    }
+  }
+
+  // 只有显式 POST 才触发补发；GET 轮询始终保持只读。
   if (
     retryFulfillment
     && order.status === "paid"
@@ -111,6 +144,10 @@ export async function POST(request: Request, { params }: StatusRouteContext) {
 
   if (payload.action === "retry_fulfillment") {
     return getStatusResponse(request, params, undefined, true);
+  }
+
+  if (payload.action === "verify_payment") {
+    return getStatusResponse(request, params, undefined, false, true);
   }
 
   const email = String(payload.email ?? "").trim().toLowerCase();

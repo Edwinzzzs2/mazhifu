@@ -15,9 +15,12 @@ type OrderPageProps = {
   params: {
     out_trade_no: string;
   };
+  searchParams?: {
+    payment?: string;
+  };
 };
 
-export default async function OrderPage({ params }: OrderPageProps) {
+export default async function OrderPage({ params, searchParams }: OrderPageProps) {
   const sessionToken = getOrderSessionToken();
   const order = await getOrderViewWithSession(params.out_trade_no, sessionToken);
 
@@ -47,7 +50,10 @@ export default async function OrderPage({ params }: OrderPageProps) {
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
           <section className="min-w-0" aria-label="订单状态与发货内容">
-            <OrderStatusPanel initial_order={orderView} />
+            <OrderStatusPanel
+              initial_order={orderView}
+              payment_returned={searchParams?.payment === "confirming"}
+            />
           </section>
 
           <aside className="min-w-0">

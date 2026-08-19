@@ -40,7 +40,12 @@ export async function GET(request: Request) {
     origin,
   );
 
-  // 同步跳转可能被用户伪造，订单状态只由异步验签通知或服务端主动查询更新。
+  if (outTradeNo && validState) {
+    redirectUrl.searchParams.set("payment", "confirming");
+  }
+
+  // 同步跳转可能被用户伪造，因此这里只标记前端进入确认态；
+  // 订单状态仍由异步验签通知或订单页发起的服务端主动查询更新。
   logger.info("response", {
     status: 303,
     out_trade_no: outTradeNo || null,
