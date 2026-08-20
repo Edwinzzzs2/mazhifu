@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  BookOpen,
   Check,
   CheckCircle2,
   Clock3,
@@ -634,31 +635,26 @@ export function Storefront({
                   </label>
 
                   {/* Payment method */}
-                  <div>
-                    <div className="mb-2 text-sm font-semibold">支付方式</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([["alipay", "支付宝"], ["wxpay", "微信支付"]] as const).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          className={`payment-choice ${payType === value ? "is-active" : ""}`}
-                          onClick={() => setPayType(value)}
-                        >
-                          <span
-                            className={`grid h-6 w-6 place-items-center rounded-md text-xs font-bold ${
-                              value === "wxpay"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-sky-50 text-sky-700"
-                            }`}
-                          >
-                            {label.slice(0, 1)}
-                          </span>
-                          {label}
-                          {payType === value && <Check className="ml-auto h-4 w-4" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <PaymentMethodPicker
+                    payType={payType}
+                    onChange={setPayType}
+                    className="hidden lg:block"
+                  />
+
+                  {/* 移动端将使用说明放进表单滚动区，长内容不会挤压底部固定下单栏。 */}
+                  {(selectedProduct.instructions || selectedProduct.description) && (
+                    <section className="overflow-hidden rounded-lg border border-sky-100 bg-sky-50/60 lg:hidden">
+                      <div className="flex items-center gap-2 border-b border-sky-100 px-3.5 py-3 text-sm font-bold text-slate-800">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white text-sky-500 shadow-sm ring-1 ring-sky-100">
+                          <BookOpen className="h-4 w-4" />
+                        </span>
+                        商品使用说明
+                      </div>
+                      <div className="whitespace-pre-wrap px-3.5 py-3 text-[13px] leading-6 text-slate-600 [overflow-wrap:anywhere] sm:text-sm">
+                        {selectedProduct.instructions || selectedProduct.description}
+                      </div>
+                    </section>
+                  )}
 
                   {/* Error */}
                   {checkoutError && (
@@ -670,6 +666,13 @@ export function Storefront({
 
                 {/* Sticky footer */}
                 <div className="shrink-0 border-t border-sky-100 bg-white p-4 sm:p-5">
+                  {/* 移动端将支付方式与金额固定在一起，商品说明仅在上方内容区滚动。 */}
+                  <PaymentMethodPicker
+                    payType={payType}
+                    onChange={setPayType}
+                    className="mb-3 lg:hidden"
+                  />
+
                   {/* Quantity + total */}
                   <div className="mb-3 flex items-center justify-between gap-4 sm:mb-4">
                     <div className="flex h-11 items-center overflow-hidden rounded-md border border-sky-200">
@@ -723,6 +726,44 @@ export function Storefront({
           onClose={() => setTracking(null)}
         />
       )}
+    </div>
+  );
+}
+
+function PaymentMethodPicker({
+  payType,
+  onChange,
+  className = "",
+}: {
+  payType: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <div className="mb-2 text-sm font-semibold">支付方式</div>
+      <div className="grid grid-cols-2 gap-2">
+        {([["alipay", "支付宝"], ["wxpay", "微信支付"]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`payment-choice ${payType === value ? "is-active" : ""}`}
+            onClick={() => onChange(value)}
+          >
+            <span
+              className={`grid h-6 w-6 place-items-center rounded-md text-xs font-bold ${
+                value === "wxpay"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-sky-50 text-sky-700"
+              }`}
+            >
+              {label.slice(0, 1)}
+            </span>
+            {label}
+            {payType === value && <Check className="ml-auto h-4 w-4" />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
