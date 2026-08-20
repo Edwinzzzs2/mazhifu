@@ -572,17 +572,17 @@ export function Storefront({
                 onSubmit={(e) => { void handleCheckout(e); }}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <div className="touch-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+                <div className="touch-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:space-y-4 sm:p-5">
                   {/* 手机端简要商品信息 */}
-                  <div className="flex items-center gap-3 rounded-lg border border-sky-100 bg-sky-50 p-3 lg:hidden">
+                  <div className="flex items-center gap-2.5 rounded-lg border border-sky-100 bg-sky-50 p-2.5 sm:gap-3 sm:p-3 lg:hidden">
                     {selectedProduct.image_url ? (
                       <img
                         src={selectedProduct.image_url}
                         alt={selectedProduct.name}
-                        className="h-14 w-14 shrink-0 rounded-md object-cover"
+                        className="h-12 w-12 shrink-0 rounded-md object-cover sm:h-14 sm:w-14"
                       />
                     ) : (
-                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-sky-100">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-sky-100 sm:h-14 sm:w-14">
                         <ShoppingBag className="h-6 w-6 text-sky-400" />
                       </div>
                     )}
@@ -595,10 +595,10 @@ export function Storefront({
                   </div>
 
                   {/* Email */}
-                  <label className="block text-sm font-semibold">
+                  <label className="block text-[13px] font-semibold sm:text-sm">
                     联系方式 / 邮箱
                     <span className="ml-1 text-red-500">*</span>
-                    <div className="relative mt-1.5">
+                    <div className="relative mt-1 sm:mt-1.5">
                       <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
                         type="email"
@@ -607,16 +607,16 @@ export function Storefront({
                         placeholder="支付成功后用于查询订单"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="form-control pl-9"
+                        className="form-control h-11 py-2 pl-9 sm:h-auto sm:py-2.5"
                       />
                     </div>
                   </label>
 
                   {/* Query password */}
-                  <label className="block text-sm font-semibold">
+                  <label className="block text-[13px] font-semibold sm:text-sm">
                     查单密码
                     <span className="ml-1 text-red-500">*</span>
-                    <div className="relative mt-1.5">
+                    <div className="relative mt-1 sm:mt-1.5">
                       <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <input
                         type="password"
@@ -626,10 +626,10 @@ export function Storefront({
                         placeholder="自定义密码，用于查询订单状态"
                         value={queryPassword}
                         onChange={(e) => setQueryPassword(e.target.value)}
-                        className="form-control pl-9"
+                        className="form-control h-11 py-2 pl-9 sm:h-auto sm:py-2.5"
                       />
                     </div>
-                    <p className="mt-1 text-xs font-normal text-slate-400">
+                    <p className="mt-1 text-[11px] font-normal leading-4 text-slate-400 sm:text-xs">
                       请记住此密码，支付后凭邮箱 + 查单密码查看发货内容
                     </p>
                   </label>
@@ -644,13 +644,13 @@ export function Storefront({
                   {/* 移动端将使用说明放进表单滚动区，长内容不会挤压底部固定下单栏。 */}
                   {(selectedProduct.instructions || selectedProduct.description) && (
                     <section className="overflow-hidden rounded-lg border border-sky-100 bg-sky-50/60 lg:hidden">
-                      <div className="flex items-center gap-2 border-b border-sky-100 px-3.5 py-3 text-sm font-bold text-slate-800">
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-white text-sky-500 shadow-sm ring-1 ring-sky-100">
+                      <div className="flex items-center gap-2 border-b border-sky-100 px-3 py-2.5 text-[13px] font-bold text-slate-800 sm:px-3.5 sm:py-3 sm:text-sm">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white text-sky-500 shadow-sm ring-1 ring-sky-100 sm:h-7 sm:w-7">
                           <BookOpen className="h-4 w-4" />
                         </span>
                         商品使用说明
                       </div>
-                      <div className="whitespace-pre-wrap px-3.5 py-3 text-[13px] leading-6 text-slate-600 [overflow-wrap:anywhere] sm:text-sm">
+                      <div className="whitespace-pre-wrap px-3 py-2.5 text-[13px] leading-5 text-slate-600 [overflow-wrap:anywhere] sm:px-3.5 sm:py-3 sm:text-sm sm:leading-6">
                         {selectedProduct.instructions || selectedProduct.description}
                       </div>
                     </section>
