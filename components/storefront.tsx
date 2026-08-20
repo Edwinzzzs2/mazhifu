@@ -500,14 +500,14 @@ export function Storefront({
           {/* Drawer panel:
                手机端：从底部弹出，圆角，最高 92vh
                PC端：从右侧滑入，最宽 4xl */}
-          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl lg:inset-y-0 lg:inset-x-auto lg:right-0 lg:h-[100dvh] lg:w-full lg:max-w-4xl lg:rounded-none lg:pb-0">
+          <div className="product-drawer-panel fixed inset-x-0 bottom-[-1px] z-50 flex h-[min(92dvh,720px)] flex-col rounded-t-lg bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:inset-y-0 sm:inset-x-auto sm:right-0 sm:h-[100dvh] sm:w-[min(92vw,560px)] sm:rounded-none sm:pb-0 lg:w-full lg:max-w-4xl">
             {/* 手机拖拽把手 */}
             <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             {/* Drawer header */}
-            <div className="flex min-w-0 shrink-0 items-center justify-between border-b border-sky-100 px-4 py-3 sm:px-5 sm:py-4">
+            <div className="flex min-w-0 shrink-0 items-center justify-between border-b border-sky-100 px-4 py-2.5 sm:px-5 sm:py-3">
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-sky-600">商品详情</div>
-                <h2 className="mt-0.5 line-clamp-1 text-sm font-bold sm:text-base">{selectedProduct.name}</h2>
+                <h2 className="mt-0.5 hidden line-clamp-1 text-sm font-bold sm:block sm:text-base">{selectedProduct.name}</h2>
               </div>
               <button
                 type="button"
@@ -572,23 +572,23 @@ export function Storefront({
                 onSubmit={(e) => { void handleCheckout(e); }}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <div className="touch-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:space-y-4 sm:p-5">
+                <div className="touch-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:space-y-3 sm:p-4">
                   {/* 手机端简要商品信息 */}
-                  <div className="flex items-center gap-2.5 rounded-lg border border-sky-100 bg-sky-50 p-2.5 sm:gap-3 sm:p-3 lg:hidden">
+                  <div className="flex items-center gap-2 rounded-md border border-sky-100 bg-sky-50/80 p-2 sm:gap-2.5 sm:p-2.5 lg:hidden">
                     {selectedProduct.image_url ? (
                       <img
                         src={selectedProduct.image_url}
                         alt={selectedProduct.name}
-                        className="h-12 w-12 shrink-0 rounded-md object-cover sm:h-14 sm:w-14"
+                        className="h-10 w-10 shrink-0 rounded-md object-cover sm:h-12 sm:w-12"
                       />
                     ) : (
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-sky-100 sm:h-14 sm:w-14">
-                        <ShoppingBag className="h-6 w-6 text-sky-400" />
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-sky-100 sm:h-12 sm:w-12">
+                        <ShoppingBag className="h-5 w-5 text-sky-400" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <div className="line-clamp-1 text-sm font-bold">{selectedProduct.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">
+                      <div className="line-clamp-1 text-[13px] font-bold sm:text-sm">{selectedProduct.name}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-500 sm:mt-1 sm:text-xs">
                         库存 {selectedProduct.stock} 件 · ¥{Number(selectedProduct.price).toFixed(2)}/件
                       </div>
                     </div>
@@ -607,7 +607,7 @@ export function Storefront({
                         placeholder="支付成功后用于查询订单"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="form-control h-11 py-2 pl-9 sm:h-auto sm:py-2.5"
+                        className="form-control h-9 py-1.5 pl-9 placeholder:text-sm placeholder:font-normal sm:h-10 sm:py-2 sm:text-sm"
                       />
                     </div>
                   </label>
@@ -626,7 +626,7 @@ export function Storefront({
                         placeholder="自定义密码，用于查询订单状态"
                         value={queryPassword}
                         onChange={(e) => setQueryPassword(e.target.value)}
-                        className="form-control h-11 py-2 pl-9 sm:h-auto sm:py-2.5"
+                        className="form-control h-9 py-1.5 pl-9 placeholder:text-sm placeholder:font-normal sm:h-10 sm:py-2 sm:text-sm"
                       />
                     </div>
                     <p className="mt-1 text-[11px] font-normal leading-4 text-slate-400 sm:text-xs">
@@ -665,30 +665,31 @@ export function Storefront({
                 </div>
 
                 {/* Sticky footer */}
-                <div className="shrink-0 border-t border-sky-100 bg-white p-4 sm:p-5">
+                <div className="shrink-0 border-t border-sky-100 bg-white p-3 sm:p-4">
                   {/* 移动端将支付方式与金额固定在一起，商品说明仅在上方内容区滚动。 */}
                   <PaymentMethodPicker
                     payType={payType}
                     onChange={setPayType}
-                    className="mb-3 lg:hidden"
+                    compact
+                    className="mb-2.5 lg:hidden"
                   />
 
                   {/* Quantity + total */}
-                  <div className="mb-3 flex items-center justify-between gap-4 sm:mb-4">
-                    <div className="flex h-11 items-center overflow-hidden rounded-md border border-sky-200">
+                  <div className="mb-2.5 flex items-center justify-between gap-3 sm:mb-4 sm:gap-4">
+                    <div className="flex h-10 items-center overflow-hidden rounded-md border border-sky-200 sm:h-11">
                       <button
                         type="button"
-                        className="grid h-full w-11 place-items-center hover:bg-sky-50 active:bg-sky-100"
+                        className="grid h-full w-10 place-items-center hover:bg-sky-50 active:bg-sky-100 sm:w-11"
                         onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                       >
                         <Minus className="h-4 w-4" />
                       </button>
-                      <span className="grid h-full w-11 place-items-center border-x border-sky-200 text-sm font-semibold">
+                      <span className="grid h-full w-10 place-items-center border-x border-sky-200 text-sm font-semibold sm:w-11">
                         {quantity}
                       </span>
                       <button
                         type="button"
-                        className="grid h-full w-11 place-items-center hover:bg-sky-50 active:bg-sky-100"
+                        className="grid h-full w-10 place-items-center hover:bg-sky-50 active:bg-sky-100 sm:w-11"
                         onClick={() =>
                           setQuantity((q) => Math.max(1, Math.min(10, selectedProduct.stock, q + 1)))
                         }
@@ -698,7 +699,7 @@ export function Storefront({
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-slate-400">合计</div>
-                      <div className="text-xl font-bold text-sky-500 sm:text-2xl">
+                      <div className="text-lg font-bold text-sky-500 sm:text-2xl">
                         ¥{(Number(selectedProduct.price) * quantity).toFixed(2)}
                       </div>
                     </div>
@@ -708,7 +709,7 @@ export function Storefront({
                     type="submit"
                     size="lg"
                     disabled={selectedProduct.stock < 1 || checkingOut}
-                    className="h-11 w-full bg-emerald-500 text-sm shadow-none hover:bg-emerald-600"
+                    className="h-10 w-full bg-emerald-500 text-sm shadow-none hover:bg-emerald-600 sm:h-11"
                   >
                     {checkingOut ? "正在下单…" : "立即下单"}
                   </Button>
@@ -733,21 +734,23 @@ export function Storefront({
 function PaymentMethodPicker({
   payType,
   onChange,
+  compact = false,
   className = "",
 }: {
   payType: string;
   onChange: (value: string) => void;
+  compact?: boolean;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <div className="mb-2 text-sm font-semibold">支付方式</div>
+      <div className={compact ? "mb-1.5 text-[13px] font-semibold" : "mb-2 text-sm font-semibold"}>支付方式</div>
       <div className="grid grid-cols-2 gap-2">
         {([["alipay", "支付宝"], ["wxpay", "微信支付"]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
-            className={`payment-choice ${payType === value ? "is-active" : ""}`}
+            className={`payment-choice ${compact ? "min-h-10 px-2.5 text-sm" : ""} ${payType === value ? "is-active" : ""}`}
             onClick={() => onChange(value)}
           >
             <span
